@@ -1,6 +1,7 @@
 """
 bot.py: Sarthi Public Assistant - Citizen Document Contradiction Telegram Bot.
-Handles single documents, multiple uploads, and Telegram albums/media-groups (up to 5 documents).
+Handles single documents, multiple uploads, Telegram albums, and /demo bundle tests.
+Directly powered by backend services: identity_comparison and identity_messages.
 """
 
 import asyncio
@@ -20,7 +21,7 @@ from telegram.ext import (
 )
 
 from config import TELEGRAM_BOT_TOKEN, TEMP_DIR
-from verification_client import verify_documents
+from verification_client import verify_documents, verify_bundle_by_id
 from explainer import format_citizen_report
 
 # Enable logging
@@ -33,14 +34,13 @@ logger = logging.getLogger(__name__)
 COLLECTING_DOCS = 1
 VERIFY_BUTTON_TEXT = "🔍 Jaanch Shuru Karein (Verify Bundle)"
 MAX_DOCS = 5
-ALBUM_DEBOUNCE_SECONDS = 1.5  # Wait time to collect all images sent together in an album
+ALBUM_DEBOUNCE_SECONDS = 1.5
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Welcomes the citizen and begins document bundle collection."""
     user = update.effective_user
     context.user_data["doc_paths"] = []
     
-    # Cancel any pending debounce task
     pending = context.user_data.get("debounce_task")
     if pending and not pending.done():
         pending.cancel()
@@ -53,7 +53,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         "━━━━━━━━━━━━━━━━━━━━\n"
         "📄 *Documents Bhejiye:*\n"
         "Aap ek-ek karke ya *ek sath select karke multiple photos* bhej sakte hain "
-        "(Aadhaar, PAN, Income Certificate, Ration Card, Address proof)."
+        "(Aadhaar, PAN, Income Certificate, Ration Card, Address proof).\n\n"
+        "💡 *Tip:* Test bundle dekhne ke liye type karein `/demo`"
     )
 
     await update.message.reply_text(
@@ -63,8 +64,38 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     )
     return COLLECTING_DOCS
 
+async def demo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Allows testing any of the 16 backend synthetic test bundles."""
+    args = context.args
+    bundle_id = args[0] if args else "B07"
+
+    await update.message.reply_text(
+        f"⏳ *Backend Contradiction Engine Chal Raha Hai...*\n"
+        f"_Bundle ID: {bundle_id.upper()}_",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+    result = verify_bundle_by_id(bundle_id)
+    if not result:
+        await update.message.reply_text(
+            f"❌ Bundle '{bundle_id}' nahi mila.\n"
+            "Uplabdh Test Bundles:\n"
+            "• `/demo B01` (All Clean / Match)\n"
+            "• `/demo B02` (Spelling & Address variants)\n"
+            "• `/demo B05` (Hindi Transliteration)\n"
+            "• `/demo B07` (DOB Year Conflict)\n"
+            "• `/demo B10` (Income 8x Conflict)\n"
+            "• `/demo H01` (Hiring Candidate)",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    report = format_citizen_report(result)
+    title = result.get("bundle_title", "")
+    await update.message.reply_text(f"📌 *Test Case: {title}*\n\n" + report, parse_mode=ParseMode.MARKDOWN)
+
 async def handle_document_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Collects incoming documents, buffering multi-photo albums/bursts cleanly."""
+    """Collects incoming documents, buffering multi-photo albums cleanly."""
     doc_paths = context.user_data.setdefault("doc_paths", [])
 
     if len(doc_paths) >= MAX_DOCS:
@@ -84,12 +115,10 @@ async def handle_document_upload(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["doc_paths"] = doc_paths
     count = len(doc_paths)
 
-    # Cancel previous debounce task if new image arrived in the same burst/album
     previous_task = context.user_data.get("debounce_task")
     if previous_task and not previous_task.done():
         previous_task.cancel()
 
-    # Schedule debounce notification to allow all photos in an album to arrive first
     task = asyncio.create_task(_debounced_upload_summary(update, context))
     context.user_data["debounce_task"] = task
 
@@ -105,7 +134,6 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
     doc_paths = context.user_data.get("doc_paths", [])
     count = len(doc_paths)
 
-    # If max 5 reached, trigger verification automatically
     if count >= MAX_DOCS:
         await update.message.reply_text(
             f"✅ *Sabhi {MAX_DOCS} dastavej prapt ho gaye!*\n"
@@ -116,7 +144,6 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
         await _trigger_verification(update, context)
         return
 
-    # If 2 or more, offer Verify button
     if count >= 2:
         keyboard = [[VERIFY_BUTTON_TEXT]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
@@ -150,13 +177,13 @@ async def handle_verify_request(update: Update, context: ContextTypes.DEFAULT_TY
     return ConversationHandler.END
 
 async def _trigger_verification(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Executes bundle verification and sends report."""
+    """Executes backend bundle verification and sends report."""
     doc_paths = context.user_data.get("doc_paths", [])
     total = len(doc_paths)
 
     processing_msg = await update.message.reply_text(
         f"⏳ *Kul {total} dastavejon ka bundle mil gaya!*\n"
-        "_AI Cross-Document Contradiction Engine sabhi documents ko aapas me mila raha hai... Kripya 2-3 second pratiksha karein..._",
+        "_Backend Cross-Document Engine sabhi documents ko aapas me mila raha hai... Kripya 2-3 second pratiksha karein..._",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=ReplyKeyboardRemove(),
     )
@@ -191,15 +218,16 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """Usage help."""
     help_text = (
         "ℹ️ *Sarthi Bundle Verifier Guide:*\n\n"
-        "1. `/start` dabayein.\n"
-        "2. Apne documents (2 se 5 tak) bhejte jayein (ek-ek karke ya gallery se ek sath multiple select karke!):\n"
-        "   • Aadhaar Card\n"
-        "   • PAN Card\n"
-        "   • Income Certificate\n"
-        "   • Ration Card / Caste Certificate\n"
-        "   • Address Proof / Bijli Bill\n"
-        "3. Jab sabhi documents bhej dein, toh button dabayein: *'🔍 Jaanch Shuru Karein'*\n"
-        "4. AI pura bundle aapas me cross-check karke detail report dega!"
+        "1. `/start` dabayein aur documents bhejte jayein.\n"
+        "2. Multiple photos ek sath bhi select karke bhej sakte hain!\n"
+        "3. Button dabayein: *'🔍 Jaanch Shuru Karein'*\n\n"
+        "💡 *Backend Demo Bundles:*\n"
+        "Aap kisi bhi test case ko direct check kar sakte hain:\n"
+        "• `/demo B01` - All documents clean\n"
+        "• `/demo B02` - Spelling variants & address\n"
+        "• `/demo B05` - Hindi transliteration\n"
+        "• `/demo B07` - Date of Birth conflict\n"
+        "• `/demo B10` - Income difference"
     )
     await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
 
@@ -230,7 +258,7 @@ def main():
         print("ERROR: TELEGRAM_BOT_TOKEN not found in .env or environment!")
         return
 
-    print("🚀 Sarthi Telegram Bot (Album/Multi-Upload Enabled) is starting...")
+    print("🚀 Sarthi Telegram Bot (Backend Connected) is starting...")
     
     t_request = HTTPXRequest(
         connection_pool_size=8,
@@ -254,9 +282,10 @@ def main():
     )
 
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("demo", demo_command))
     app.add_handler(conv_handler)
 
-    print("✅ Bot is online and listening for messages (Multi-Document Album Support Active)!")
+    print("✅ Bot is online and directly connected to backend engine!")
     app.run_polling()
 
 if __name__ == "__main__":
