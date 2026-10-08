@@ -113,3 +113,7 @@ id_rsa*
 
 # Regression harness input cache (client PDFs, OCR results) — never committed
 backend/tests/regression/_cache/
+
+# Free local providers (backend/.env STORAGE_PROVIDER=local, OCR_PROVIDER=local)
+backend/local_storage/
+backend/tessdata/

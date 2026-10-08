@@ -1,22 +1,76 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: docauth-postgres
+  # ---------------------------------------------------------------------------
+  # Backend API (FastAPI / Uvicorn)
+  # Connects directly to the cloud Neon PostgreSQL database (DATABASE_URL in .env)
+  # and the local Redis container for caching and Celery queues.
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: fddt-backend:local
+    container_name: docauth-backend
+    restart: unless-stopped
+    command: ["sh", "-c", "alembic upgrade head && python seed.py && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
+    env_file: ./backend/.env
+    environment:
+      # DATABASE_URL is read from ./backend/.env (pointing to Neon)
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    ports:
+      - "8000:8000"
+    volumes:
+      - app_storage:/app/local_storage
+    depends_on:
+      redis:
+        condition: service_healthy
+    develop:
+      watch:
+        # Sync backend app code live — Uvicorn with --reload reloads immediately
+        - action: sync
+          path: ./backend/app
+          target: /app/app
+        - action: sync
+          path: ./backend/alembic.ini
+          target: /app/alembic.ini
+        # Rebuild container image if python dependencies change
+        - action: rebuild
+          path: ./backend/requirements.txt
+
+  # ---------------------------------------------------------------------------
+  # Frontend (React / Vite built into Nginx reverse proxy)
+  # Proxies /api requests to http://backend:8000.
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: fddt-frontend:local
+    container_name: docauth-frontend
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-docauth}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-docauth}
-      POSTGRES_DB: ${POSTGRES_DB:-docauth}
+      API_UPSTREAM: http://backend:8000
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-docauth} -d ${POSTGRES_DB:-docauth}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_started
+    develop:
+      watch:
+        # Rebuild and reload the frontend Nginx bundle when source files change
+        - action: rebuild
+          path: ./frontend/src
+        - action: rebuild
+          path: ./frontend/public
+        - action: rebuild
+          path: ./frontend/index.html
+        - action: rebuild
+          path: ./frontend/package.json
 
+  # ---------------------------------------------------------------------------
+  # Redis (In-memory broker for Celery queues and sign-in rate limiting)
+  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: docauth-redis
@@ -31,55 +85,36 @@ services:
       timeout: 5s
       retries: 10
 
-  # PgBouncer, transaction pooling (pgbouncer/pgbouncer.ini). The app's roles
-  # connect on :6432 when DATABASE_POOLER_HOST is set. userlist.txt holds the
-  # LOCAL DEV passwords only — production uses SCRAM secrets from a vault.
-  pgbouncer:
-    image: edoburu/pgbouncer:v1.23.1-p3
-    container_name: docauth-pgbouncer
-    restart: unless-stopped
-    volumes:
-      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
-      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
-    ports:
-      - "${PGBOUNCER_PORT:-6432}:6432"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   # ---------------------------------------------------------------------------
-  # Processing workers (optional, local) — one service per queue so each scales
-  # on its own, e.g.:
-  #   docker compose --profile workers up -d --scale forensics-worker=3
-  # These are Linux containers: forensics runs Celery's PREFORK pool (one
-  # process per core — real parallelism, no GIL contention), the two Azure
-  # queues run threads (I/O-bound).
-  # Same image as the API (backend/Dockerfile); Azure keys etc. come from
-  # backend/.env, with hostnames pointed at the compose services. Sizes are
-  # the *_WORKER_CONCURRENCY env vars (see backend/start-worker.sh).
+  # Processing workers (optional, local) — run with `--profile workers`
+  # e.g.: docker compose --profile workers up --watch
   # ---------------------------------------------------------------------------
   extraction-worker: &worker
     profiles: ["workers"]
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     image: fddt-backend:local
     command: ["sh", "start-worker.sh", "extraction"]
     env_file: ./backend/.env
     environment: &worker_env
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-docauth}:${POSTGRES_PASSWORD:-docauth}@postgres:5432/${POSTGRES_DB:-docauth}
+      # Connects to Neon database from backend/.env and Redis
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
-      # Through PgBouncer (transaction pooling); each process keeps no pool.
-      DATABASE_POOLER_HOST: pgbouncer
-      DATABASE_POOLER_PORT: "6432"
+    volumes:
+      - app_storage:/app/local_storage
     depends_on:
-      postgres:
-        condition: service_healthy
-      pgbouncer:
-        condition: service_started
       redis:
         condition: service_healthy
     restart: unless-stopped
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./backend/app
+          target: /app/app
+        - action: rebuild
+          path: ./backend/requirements.txt
 
   vision-worker:
     <<: *worker
@@ -88,10 +123,6 @@ services:
   forensics-worker:
     <<: *worker
     command: ["sh", "start-worker.sh", "forensics"]
-    # CPU per replica; start-worker.sh runs one prefork process per CPU of
-    # this limit (cgroup cpu.max), so `--scale forensics-worker=N` adds real
-    # cores rather than oversubscribing the host. Size N x cpus to the cores
-    # available (e.g. 2 replicas x 2 CPUs on a 4-core host).
     cpus: ${FORENSICS_WORKER_CPUS:-2}
 
   beat:
@@ -99,5 +130,5 @@ services:
     command: ["sh", "start-beat.sh"]
 
 volumes:
-  postgres_data:
   redis_data:
+  app_storage:
