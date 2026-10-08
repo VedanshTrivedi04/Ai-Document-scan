@@ -167,6 +167,28 @@ class Settings(BaseSettings):
     # Unset: the subdomain is taken only from the X-Org-Subdomain header.
     app_base_domain: str | None = Field(default=None, alias="APP_BASE_DOMAIN")
 
+    # --- Providers: Azure, or free substitutes for development and demos ---
+    # STORAGE_PROVIDER: "azure" (Blob Storage) or "local" (files on this
+    # machine's disk under LOCAL_STORAGE_DIR, served through GET /files/...).
+    storage_provider: str = Field(default="azure", alias="STORAGE_PROVIDER")
+    local_storage_dir: str = Field(default="./local_storage", alias="LOCAL_STORAGE_DIR")
+    # Where a browser reaches GET /files. "/api/files" goes through the
+    # frontend's dev proxy; use the API's full URL when there is no proxy.
+    local_storage_public_url: str = Field(default="/api/files", alias="LOCAL_STORAGE_PUBLIC_URL")
+    # OCR_PROVIDER: "azure" (Document Intelligence) or "local" (the PDF's own
+    # text, and Tesseract for scans and images: app/services/local_ocr.py).
+    ocr_provider: str = Field(default="azure", alias="OCR_PROVIDER")
+    tessdata_dir: str | None = Field(default=None, alias="TESSDATA_DIR")
+    tesseract_cmd: str | None = Field(default=None, alias="TESSERACT_CMD")
+    ocr_languages: str = Field(default="eng+hin", alias="OCR_LANGUAGES")
+    # LLM_PROVIDER: "azure" (Azure OpenAI) or "openai_compatible" (Gemini,
+    # Groq, Ollama, ...: app/services/llm_openai_compatible.py). Text only.
+    llm_provider: str = Field(default="azure", alias="LLM_PROVIDER")
+    llm_base_url: str | None = Field(default=None, alias="LLM_BASE_URL")
+    llm_api_key: str | None = Field(default=None, alias="LLM_API_KEY")
+    llm_model: str | None = Field(default=None, alias="LLM_MODEL")
+    llm_request_timeout_seconds: float = Field(default=120.0, alias="LLM_REQUEST_TIMEOUT_SECONDS")
+
     # --- Translation (app/services/translation_service.py) ---
     # Google Cloud Translation API key. Without it, messages are available in
     # English and in the languages with a built-in catalog (Hindi); any other

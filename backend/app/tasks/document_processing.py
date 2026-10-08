@@ -35,6 +35,7 @@ from app.services.field_locator_service import attach_field_locations
 from app.services.forensics.font_consistency import analyze_font_consistency
 from app.services.line_item_parsing import enrich_extracted_fields
 from app.services.llm_service import get_llm_service
+from app.services.local_ocr import LocalOCRService
 from app.services.ocr_service import OCRPage, OCRResult, get_ocr_service
 from app.services.risk_scoring_service import request_case_scoring
 from app.services.storage_service import get_storage_service_for_task
@@ -172,7 +173,12 @@ def process_document(document_id: str, company_id: str | None = None) -> None:
                 document.blob_storage_path, expires_in_minutes=30
             )
 
-            ocr_result = get_ocr_service().analyze_url(document_url)
+            ocr_service = get_ocr_service()
+            if isinstance(ocr_service, LocalOCRService):
+                # Reads the file itself; nothing outside this machine fetches the URL.
+                ocr_result = ocr_service.analyze_bytes(storage.download_bytes(document.blob_storage_path))
+            else:
+                ocr_result = ocr_service.analyze_url(document_url)
             if identity_case:
                 _complete_identity_document(db, document, ocr_result)
                 return

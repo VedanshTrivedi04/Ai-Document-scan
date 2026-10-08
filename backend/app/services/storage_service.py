@@ -233,6 +233,12 @@ class AzureBlobStorageService(StorageService):
 
 @lru_cache
 def _build_storage_service() -> StorageService:
+    if settings.storage_provider == "local":
+        from app.services.local_storage import LocalStorageService
+
+        return LocalStorageService(
+            settings.local_storage_dir, settings.azure_storage_container_name, settings.local_storage_public_url
+        )
     return AzureBlobStorageService(
         connection_string=settings.azure_storage_connection_string,
         container_name=settings.azure_storage_container_name,

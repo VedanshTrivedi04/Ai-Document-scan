@@ -1674,6 +1674,13 @@ def get_llm_service() -> LLMService:
     Celery task, which has no request/DI context). Raises
     LLMConfigurationError directly; callers decide how to handle it."""
     global _llm_service_singleton
+    if _llm_service_singleton is None and settings.llm_provider == "openai_compatible":
+        from app.services.llm_openai_compatible import OpenAICompatibleLLMService
+
+        _llm_service_singleton = OpenAICompatibleLLMService(
+            settings.llm_base_url, settings.llm_api_key, settings.llm_model,
+            settings.llm_request_timeout_seconds,
+        )
     if _llm_service_singleton is None:
         _llm_service_singleton = AzureOpenAILLMService(
             api_key=settings.azure_openai_key,

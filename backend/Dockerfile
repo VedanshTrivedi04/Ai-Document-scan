@@ -4,10 +4,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-# libglib is needed by the OpenCV headless wheel at import time.
+# libglib is needed by the OpenCV headless wheel at import time. Tesseract
+# (English and Hindi) reads scans and images when OCR_PROVIDER=local.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libglib2.0-0 \
+    && apt-get install -y --no-install-recommends libglib2.0-0 tesseract-ocr tesseract-ocr-hin \
     && rm -rf /var/lib/apt/lists/*
+# Where the packages above put the language files (overrides TESSDATA_DIR from .env).
+ENV TESSDATA_DIR=/usr/share/tesseract-ocr/5/tessdata
 
 WORKDIR /app
 COPY requirements.txt .

@@ -243,7 +243,11 @@ class OCRService:
 
 
 @lru_cache
-def _build_ocr_service() -> OCRService:
+def _build_ocr_service():
+    if settings.ocr_provider == "local":
+        from app.services.local_ocr import build_local_ocr_service
+
+        return build_local_ocr_service()
     return OCRService(
         endpoint=settings.azure_document_intelligence_endpoint,
         key=settings.azure_document_intelligence_key,

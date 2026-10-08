@@ -16,6 +16,7 @@ from app.api.case_reports import router as case_reports_router
 from app.api.cases import router as cases_router
 from app.api.documents import router as documents_router
 from app.api.families import router as families_router
+from app.api.files import router as files_router
 from app.api.findings import router as findings_router
 from app.api.i18n import router as i18n_router
 from app.api.organisation import router as organisation_router
@@ -42,6 +43,7 @@ app.include_router(i18n_router)
 app.include_router(organisation_router)
 app.include_router(profiles_router)
 app.include_router(families_router)
+app.include_router(files_router)
 app.include_router(case_reports_router)
 app.include_router(documents_router)
 app.include_router(bulk_uploads_router)
