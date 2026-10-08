@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiFetch, ApiError, parseErrorDetail } from "@/api/client"
+import { getOrgSubdomain } from "@/lib/organisation"
 import type {
   AuditLogEntry,
   Case,
@@ -9,16 +10,25 @@ import type {
   CaseListItem,
   CaseReport,
   CaseType,
+  FindingReviewPayload,
+  FindingReviewResponse,
   SignatureMatch,
   SignatureReference,
   SignatureReferenceCreatePayload,
 } from "@/types/case"
 
-export function createCase(caseType: CaseType, token: string): Promise<Case> {
+export function createCase(
+  caseType: CaseType,
+  token: string,
+  familyMemberId?: string | null,
+): Promise<Case> {
   return apiFetch<Case>("/cases", {
     method: "POST",
     token,
-    body: JSON.stringify({ case_type: caseType }),
+    body: JSON.stringify({
+      case_type: caseType,
+      ...(familyMemberId ? { family_member_id: familyMemberId } : {}),
+    }),
   })
 }
 
@@ -36,8 +46,9 @@ export function listCases(
   return apiFetch<CaseListItem[]>(`/cases${query ? `?${query}` : ""}`, { token })
 }
 
-export function getCase(caseId: string, token: string): Promise<CaseDetail> {
-  return apiFetch<CaseDetail>(`/cases/${caseId}`, { token })
+export function getCase(caseId: string, token: string, lang = "en"): Promise<CaseDetail> {
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ""
+  return apiFetch<CaseDetail>(`/cases/${caseId}${query}`, { token })
 }
 
 export function getCaseAuditLog(caseId: string, token: string): Promise<AuditLogEntry[]> {
@@ -59,6 +70,10 @@ export function uploadDocument(
     const xhr = new XMLHttpRequest()
     xhr.open("POST", `${API_BASE_URL}/cases/${caseId}/documents`)
     xhr.setRequestHeader("Authorization", `Bearer ${token}`)
+    const orgSubdomain = getOrgSubdomain()
+    if (orgSubdomain) {
+      xhr.setRequestHeader("X-Org-Subdomain", orgSubdomain)
+    }
 
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && onProgress) {
@@ -175,6 +190,29 @@ export function escalateCase(
     token,
     body: JSON.stringify({ reason }),
   })
+}
+
+/**
+ * Reviewer decision on one cross-document finding (Phase 4).
+ * `decision: "accepted" | "dismissed" | "pending"`.
+ * Returns the updated finding and new case finding_counts.
+ */
+export function reviewFinding(
+  caseId: string,
+  findingId: string,
+  payload: FindingReviewPayload,
+  lang = "en",
+  token: string,
+): Promise<FindingReviewResponse> {
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ""
+  return apiFetch<FindingReviewResponse>(
+    `/cases/${caseId}/findings/${findingId}${query}`,
+    {
+      method: "PATCH",
+      token,
+      body: JSON.stringify(payload),
+    },
+  )
 }
 
 // ---- Per-case PDF report (reviewer/admin only). Generation is synchronous

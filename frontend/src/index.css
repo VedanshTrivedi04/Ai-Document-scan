@@ -111,8 +111,8 @@
 }
 
 @theme inline {
-  /* Plus Jakarta Sans primary, Inter fallback */
-  --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Plus Jakarta Sans primary, Inter, Noto Sans Devanagari / Noto Sans multilingual fallback */
+  --font-sans: "Plus Jakarta Sans", "Inter", "Noto Sans Devanagari", "Noto Sans", ui-sans-serif, system-ui, sans-serif;
 
   /* Card elevation — softer, more layered shadow */
   --shadow-card: 0 4px 20px -2px rgba(15, 23, 42, 0.04), 0 2px 8px -2px rgba(15, 23, 42, 0.02);

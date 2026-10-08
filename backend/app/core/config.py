@@ -161,6 +161,19 @@ class Settings(BaseSettings):
         default=20, alias="LOGIN_MAX_ATTEMPTS_PER_IP_PER_MINUTE"
     )
 
+    # --- Organisation subdomains (app/services/subdomains.py) ---
+    # The domain organisations sit one label below: with "example.org",
+    # indore.example.org is the organisation whose subdomain is "indore".
+    # Unset: the subdomain is taken only from the X-Org-Subdomain header.
+    app_base_domain: str | None = Field(default=None, alias="APP_BASE_DOMAIN")
+
+    # --- Translation (app/services/translation_service.py) ---
+    # Google Cloud Translation API key. Without it, messages are available in
+    # English and in the languages with a built-in catalog (Hindi); any other
+    # language falls back to English.
+    google_translate_api_key: str | None = Field(default=None, alias="GOOGLE_TRANSLATE_API_KEY")
+    google_translate_timeout_seconds: float = Field(default=8.0, alias="GOOGLE_TRANSLATE_TIMEOUT_SECONDS")
+
     # --- Redis / Celery ---
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
     celery_broker_url: str = Field(

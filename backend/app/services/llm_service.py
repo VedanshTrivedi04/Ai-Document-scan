@@ -163,6 +163,63 @@ class DocumentAnalysis(BaseModel):
         }
 
 
+class PersonNameField(BaseModel):
+    """A person's name: `value` as printed, in the document's own script;
+    `latin` the same name in Latin letters (a transliteration when the
+    document is in another script, else a copy of `value`)."""
+
+    value: str | None
+    latin: str | None
+    confidence: float
+    uncertain: bool
+
+
+class AddressField(BaseModel):
+    value: str | None
+    latin: str | None
+    postal_code: str | None
+    confidence: float
+    uncertain: bool
+
+
+class GenderField(BaseModel):
+    value: Literal["male", "female", "other"] | None
+    raw_text: str | None
+    confidence: float
+    uncertain: bool
+
+
+class IdentityAnalysis(BaseModel):
+    """One document of a person's bundle (app/services/identity_documents.py).
+    Dates and amounts are normalized exactly as in DocumentAnalysis."""
+
+    document_type: str
+    document_type_confidence: float
+    full_name: PersonNameField
+    parent_or_spouse_name: PersonNameField
+    date_of_birth: DateFieldValue
+    gender: GenderField
+    address: AddressField
+    id_number: FieldValue
+    annual_income: AmountFieldValue
+    issuing_authority: FieldValue
+    issue_date: DateFieldValue
+    additional_fields: list[AdditionalField] = []
+
+    def identity_fields_as_dict(self) -> dict[str, dict[str, Any]]:
+        return {
+            "full_name": self.full_name.model_dump(),
+            "parent_or_spouse_name": self.parent_or_spouse_name.model_dump(),
+            "date_of_birth": self.date_of_birth.model_dump(),
+            "gender": self.gender.model_dump(),
+            "address": self.address.model_dump(),
+            "id_number": self.id_number.model_dump(),
+            "annual_income": self.annual_income.model_dump(),
+            "issuing_authority": self.issuing_authority.model_dump(),
+            "issue_date": self.issue_date.model_dump(),
+        }
+
+
 class NormalizedBoundingBox(BaseModel):
     """Page-fraction (0-1) location, same convention as app/services/
     forensics/ela.py and copy_move.py's bounding boxes — deliberately
@@ -297,6 +354,14 @@ class LLMService(ABC):
         """Classify `document_text` against `document_type_labels` and
         extract its fields, template-free (no per-type extractor)."""
         raise NotImplementedError
+
+    def extract_identity(
+        self, document_text: str, document_type_labels: list[str]
+    ) -> IdentityAnalysis:
+        """Classify one document of a person's bundle and extract the
+        person's details. Not abstract: a backend that has not implemented
+        it cannot process identity cases."""
+        raise LLMConfigurationError("This LLM backend cannot extract identity documents.")
 
     @abstractmethod
     def judge_entity_match(self, name: str, candidates: list[str]) -> EntityMatchJudgment:
@@ -514,6 +579,108 @@ def _analysis_json_schema() -> dict[str, Any]:
             "additional_fields",
             "line_items",
             "amount_in_words",
+        ],
+        "additionalProperties": False,
+    }
+
+
+def _person_name_field_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "value": {
+                "type": ["string", "null"],
+                "description": "The name exactly as printed, in the document's own script.",
+            },
+            "latin": {
+                "type": ["string", "null"],
+                "description": "The same name in Latin letters: a transliteration when the name is "
+                "printed in another script, otherwise identical to `value`. Null when `value` is null.",
+            },
+            "confidence": {"type": "number"},
+            "uncertain": {"type": "boolean"},
+        },
+        "required": ["value", "latin", "confidence", "uncertain"],
+        "additionalProperties": False,
+    }
+
+
+def _identity_json_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "document_type": {"type": "string"},
+            "document_type_confidence": {"type": "number"},
+            "full_name": _person_name_field_schema(),
+            "parent_or_spouse_name": _person_name_field_schema(),
+            "date_of_birth": _date_field_schema(),
+            "gender": {
+                "type": "object",
+                "properties": {
+                    "value": {"type": ["string", "null"], "enum": ["male", "female", "other", None]},
+                    "raw_text": {"type": ["string", "null"]},
+                    "confidence": {"type": "number"},
+                    "uncertain": {"type": "boolean"},
+                },
+                "required": ["value", "raw_text", "confidence", "uncertain"],
+                "additionalProperties": False,
+            },
+            "address": {
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "type": ["string", "null"],
+                        "description": "The person's full address as printed, on one line.",
+                    },
+                    "latin": {
+                        "type": ["string", "null"],
+                        "description": "The address in Latin letters (transliterated if needed).",
+                    },
+                    "postal_code": {
+                        "type": ["string", "null"],
+                        "description": "The postal/PIN code alone, Western digits. Null if none.",
+                    },
+                    "confidence": {"type": "number"},
+                    "uncertain": {"type": "boolean"},
+                },
+                "required": ["value", "latin", "postal_code", "confidence", "uncertain"],
+                "additionalProperties": False,
+            },
+            "id_number": _string_field_schema(),
+            "annual_income": _amount_field_schema(
+                "The person's stated annual income as a plain number (Western digits, no "
+                "separators or symbols). Null if the document states no income."
+            ),
+            "issuing_authority": _string_field_schema(),
+            "issue_date": _date_field_schema(),
+            "additional_fields": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "field_name": {"type": "string"},
+                        "value": {"type": ["string", "null"]},
+                        "confidence": {"type": "number"},
+                        "uncertain": {"type": "boolean"},
+                    },
+                    "required": ["field_name", "value", "confidence", "uncertain"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": [
+            "document_type",
+            "document_type_confidence",
+            "full_name",
+            "parent_or_spouse_name",
+            "date_of_birth",
+            "gender",
+            "address",
+            "id_number",
+            "annual_income",
+            "issuing_authority",
+            "issue_date",
+            "additional_fields",
         ],
         "additionalProperties": False,
     }
@@ -833,6 +1000,57 @@ Base every value strictly on the document text given — never invent a \
 plausible-looking value that is not actually present. When normalizing \
 amounts/dates, you are converting representation only (numeral system, \
 format) — never change the underlying value."""
+
+
+_IDENTITY_SYSTEM_PROMPT_TEMPLATE = """You read one document from a bundle of \
+documents that all belong to the same person (an identity card, an address \
+proof, an income certificate, a marksheet and so on). You are given the raw \
+OCR text of that one document. It may be in English, Hindi or another Indian \
+language, or a mix.
+
+Do these things in one response:
+
+1. Classify the document into exactly one of these types: {labels}. If \
+nothing fits well, use "other". Give a confidence from 0.0 to 1.0.
+
+2. Extract the details of THE PERSON THE DOCUMENT IS ABOUT (the holder or \
+applicant), never those of an officer who signed it:
+   - full_name: the person's name. `value` exactly as printed, in its own \
+script. `latin` the same name in Latin letters: a faithful letter-by-letter \
+transliteration when it is printed in another script, otherwise a copy of \
+`value`. Never translate a name and never "correct" its spelling. If the \
+document prints the name in two scripts, use the Latin one for `latin`.
+   - parent_or_spouse_name: the father's, mother's, husband's or guardian's \
+name as printed (after "S/O", "D/O", "W/O", "C/O", "Father's Name" and the \
+like), same value/latin shape. Do not include the "S/O" prefix itself.
+   - date_of_birth: normalized to ISO 8601 (YYYY-MM-DD) in `value`, original \
+text in `raw_text`. If only a year of birth is printed, leave `value` null \
+and put the year in `raw_text`.
+   - gender: "male", "female" or "other" in `value`, original text in \
+`raw_text`.
+   - address: the person's own address on one line in `value`, in Latin \
+letters in `latin`, and the postal/PIN code alone in `postal_code`.
+   - id_number: this document's own identity or certificate number, exactly \
+as printed, including any masking characters such as X or *.
+   - annual_income: the person's stated yearly income as a plain number in \
+`value` (Western digits, no separators), its 3-letter currency code in \
+`currency`, original text in `raw_text`. A monthly figure is NOT annual \
+income: leave annual_income null and put it in additional_fields.
+   - issuing_authority: the office or organisation that issued the document.
+   - issue_date: the date the document was issued, ISO 8601 in `value`.
+   - Set a field's value to null if it is genuinely absent. Never guess, and \
+never copy a value from what you expect such a document to contain.
+
+3. Put every other clearly identifiable field into `additional_fields` with \
+a short English snake_case field_name. Values stay in the document's own \
+script and are not normalized.
+
+For every field set `confidence` (0.0-1.0) and `uncertain` (true if the text \
+was ambiguous or garbled, or you are inferring rather than reading).
+
+Copy every value exactly as this document prints it, even if it looks like a \
+typing mistake. Differences between documents are what this system looks \
+for, so never smooth them out."""
 
 
 _ENTITY_MATCH_SYSTEM_PROMPT = """You judge whether an extracted \
@@ -1275,6 +1493,21 @@ class AzureOpenAILLMService(LLMService):
         )
         try:
             return DocumentAnalysis.model_validate(parsed)
+        except ValueError as exc:
+            raise LLMOperationError(
+                f"Azure OpenAI response did not match the expected schema: {exc}"
+            ) from exc
+
+    def extract_identity(
+        self, document_text: str, document_type_labels: list[str]
+    ) -> IdentityAnalysis:
+        system_prompt = _IDENTITY_SYSTEM_PROMPT_TEMPLATE.format(labels=", ".join(document_type_labels))
+        parsed = self._chat_json(
+            system_prompt, document_text, "identity_analysis", _identity_json_schema(),
+            max_tokens=MAX_TOKENS_CLASSIFICATION,
+        )
+        try:
+            return IdentityAnalysis.model_validate(parsed)
         except ValueError as exc:
             raise LLMOperationError(
                 f"Azure OpenAI response did not match the expected schema: {exc}"

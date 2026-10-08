@@ -25,6 +25,16 @@ Open http://localhost:5173. The dev server proxies `/api/*` to
 `http://127.0.0.1:8000` (see `vite.config.ts`), so no backend CORS setup
 is needed locally.
 
+### Organisation Subdomains (Local Development)
+
+Each organisation has its own subdomain. Browsers automatically resolve `*.localhost`
+to the local machine (127.0.0.1).
+
+- Run the dev server (`npm run dev`) and open `http://<subdomain>.localhost:5173` (e.g. `http://indore.localhost:5173`).
+- Set `VITE_APP_BASE_DOMAIN=localhost` in `.env` (or pass it in your shell environment).
+- Vite allows `*.localhost` via `server.allowedHosts: ['.localhost']` in `vite.config.ts`.
+- Sign-in on an organisation's subdomain is scoped to that organisation's users. Signing in on the platform site (`http://localhost:5173`) offers redirection to the organisation's site.
+
 Seeded test login (from `backend/seed.py`): `admin@example.com` /
 `ChangeMe123!`.
 

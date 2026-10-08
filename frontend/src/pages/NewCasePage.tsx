@@ -1,11 +1,13 @@
 import * as React from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { CheckCircle2Icon, PinIcon } from "lucide-react"
+import { CheckCircle2Icon, PinIcon, UsersIcon } from "lucide-react"
 import { Controller, useForm } from "react-hook-form"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
+import { useQuery } from "@tanstack/react-query"
 import { z } from "zod"
 
 import { createCase, uploadDocument } from "@/api/cases"
+import { getMyFamily } from "@/api/family"
 import { ApiError } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { Nav } from "@/design-system/Nav"
@@ -29,9 +31,9 @@ import { FileDropzone, type FileWithProgress } from "@/components/upload/FileDro
 import { SignatureReferenceCreator } from "@/components/upload/SignatureReferenceCreator"
 import { useAuth } from "@/hooks/useAuth"
 import { useUploadLimits } from "@/hooks/useUploadLimits"
-import { clientUploadProblem } from "@/lib/uploadLimits"
-import { CASE_TYPE_LABELS, CASE_TYPES, type Case } from "@/types/case"
-import type { CaseDocument, SignatureReference } from "@/types/case"
+import { clientUploadProblem, ACCEPTED_UPLOAD_TYPES, ACCEPTED_IDENTITY_UPLOAD_TYPES } from "@/lib/uploadLimits"
+import { CASE_TYPE_LABELS, CASE_TYPES, isIdentityCase, type Case } from "@/types/case"
+import type { CaseDocument, CaseType, SignatureReference } from "@/types/case"
 
 // The draw-a-box viewer (react-pdf) and the backend crop both work on PDFs
 // only, same scope as every other forensics check in this project.
@@ -48,6 +50,9 @@ type CaseTypeFormValues = z.infer<typeof caseTypeSchema>
 export function NewCasePage() {
   const { token, user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const initialFamilyMemberId = searchParams.get("family_member_id")
+
   const isPlatformAdmin = Boolean(user?.is_platform_admin)
   const canUpload = Boolean(user) && !isPlatformAdmin
   // This company's per-file limit (set by a platform admin).
@@ -68,24 +73,52 @@ export function NewCasePage() {
   // References created this session (in order), shown per document.
   const [createdRefs, setCreatedRefs] = React.useState<SignatureReference[]>([])
 
+  const [selectedFamilyMemberId, setSelectedFamilyMemberId] = React.useState<string | null>(
+    initialFamilyMemberId || null
+  )
+
+  const { data: familyData } = useQuery({
+    queryKey: ["family", "me"],
+    queryFn: () => getMyFamily("en", token!),
+    enabled: Boolean(token && !isPlatformAdmin),
+  })
+
+  const isHead = familyData?.head_user_id === user?.id
+  const selectedMember = familyData?.members?.find((m) => m.id === selectedFamilyMemberId)
+
   const {
     control,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<CaseTypeFormValues>({
     resolver: zodResolver(caseTypeSchema),
     defaultValues: {
-      caseType: "vendor_invoice",
+      caseType: "identity_verification",
     },
   })
+
+  const selectedCaseType = watch("caseType")
+  const isIdentity = isIdentityCase(selectedCaseType)
+  const [submissionCategory, setSubmissionCategory] = React.useState<"person" | "claim">("person")
+
+  const handleCategorySelect = (category: "person" | "claim") => {
+    setSubmissionCategory(category)
+    if (category === "person") {
+      setValue("caseType", "identity_verification")
+    } else {
+      setValue("caseType", "vendor_invoice")
+    }
+  }
 
   const addFiles = (newFiles: File[]) => {
     // Empty or over-the-limit files are refused here, before anything is
     // sent; the server applies the same checks (plus type/corruption ones).
     const problems = newFiles
-      .map((file) => clientUploadProblem(file, maxFileBytes))
+      .map((file) => clientUploadProblem(file, maxFileBytes, { allowImages: isIdentity }))
       .filter((p): p is string => p !== null)
-    const accepted = newFiles.filter((file) => clientUploadProblem(file, maxFileBytes) === null)
+    const accepted = newFiles.filter((file) => clientUploadProblem(file, maxFileBytes, { allowImages: isIdentity }) === null)
     setFilesError(problems.length > 0 ? problems.join(" ") : null)
     setFileEntries((prev) => [...prev, ...accepted.map((file) => ({ file }))])
   }
@@ -162,7 +195,8 @@ export function NewCasePage() {
     try {
       let activeCase = createdCase
       if (!activeCase) {
-        activeCase = await createCase(values.caseType, token)
+        const memberIdToSend = isIdentity && isHead ? selectedFamilyMemberId : null
+        activeCase = await createCase(values.caseType, token, memberIdToSend)
         setCreatedCase(activeCase)
       }
       await uploadAll(activeCase.id)
@@ -193,6 +227,7 @@ export function NewCasePage() {
     setUploadedDocs([])
     setActiveRefDoc(null)
     setCreatedRefs([])
+    setSelectedFamilyMemberId(null)
   }
 
   return (
@@ -233,6 +268,12 @@ export function NewCasePage() {
                       {" · "}
                       {uploadedCount} document{uploadedCount === 1 ? "" : "s"} uploaded.
                     </p>
+                    {selectedMember && (
+                      <p className="text-xs text-primary font-medium mt-1.5 flex items-center gap-1.5">
+                        <UsersIcon className="size-3.5" />
+                        Linked to household member: <strong>{selectedMember.full_name}</strong> ({selectedMember.relation_label || selectedMember.relation})
+                      </p>
+                    )}
                   </div>
 
                   {/* Signature reference creation — optional, per-document */}
@@ -322,39 +363,135 @@ export function NewCasePage() {
                     >
                       View Case Details →
                     </Button>
+                    {selectedMember && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => navigate("/family")}
+                      >
+                        View Family Overview →
+                      </Button>
+                    )}
                     <Button onClick={startNewCase} variant="outline">
                       Submit another case
                     </Button>
                     <Button
                       onClick={() => navigate("/")}
-                      variant="secondary"
+                      variant="ghost"
                     >
                       Back to case queue
                     </Button>
                   </div>
                 </div>
               ) : (
-                <form className="flex flex-col gap-5" onSubmit={handleSubmit(onSubmit)} noValidate>
+                <form className="flex flex-col gap-6" onSubmit={handleSubmit(onSubmit)} noValidate>
+                  {/* "What are you submitting?" 2 large cards */}
+                  <div className="flex flex-col gap-2.5">
+                    <Label className="text-sm font-semibold">What are you submitting?</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <button
+                        type="button"
+                        onClick={() => handleCategorySelect("person")}
+                        disabled={Boolean(createdCase && uploadedDocs.length > 0)}
+                        className={`flex flex-col text-left p-4 rounded-xl border-2 transition-all ${
+                          submissionCategory === "person"
+                            ? "border-primary bg-primary/5 shadow-xs"
+                            : "border-border bg-card hover:border-border/80 hover:bg-muted/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full mb-1">
+                          <span className="font-semibold text-sm text-foreground">Person's documents</span>
+                          <span className={`size-3.5 rounded-full border-2 flex items-center justify-center ${
+                            submissionCategory === "person" ? "border-primary bg-primary" : "border-muted-foreground/40"
+                          }`}>
+                            {submissionCategory === "person" && <span className="size-1.5 rounded-full bg-background" />}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-normal">
+                          Identity cards, address proofs, income certificates, education or employment verification.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCategorySelect("claim")}
+                        disabled={Boolean(createdCase && uploadedDocs.length > 0)}
+                        className={`flex flex-col text-left p-4 rounded-xl border-2 transition-all ${
+                          submissionCategory === "claim"
+                            ? "border-primary bg-primary/5 shadow-xs"
+                            : "border-border bg-card hover:border-border/80 hover:bg-muted/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full mb-1">
+                          <span className="font-semibold text-sm text-foreground">Claim documents</span>
+                          <span className={`size-3.5 rounded-full border-2 flex items-center justify-center ${
+                            submissionCategory === "claim" ? "border-primary bg-primary" : "border-muted-foreground/40"
+                          }`}>
+                            {submissionCategory === "claim" && <span className="size-1.5 rounded-full bg-background" />}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-normal">
+                          Invoices, procurement receipts, travel expenses, vendor claims and corporate records.
+                        </p>
+                      </button>
+                    </div>
+
+                    {/* Person document checklist hint */}
+                    {submissionCategory === "person" && (
+                      <div className="rounded-lg border border-blue-200/80 bg-blue-50/50 p-3 mt-1 text-xs text-blue-900">
+                        <span className="font-semibold block mb-1">Typical documents to include:</span>
+                        <div className="flex flex-wrap gap-2 text-blue-800">
+                          <span className="inline-flex items-center gap-1 rounded bg-blue-100/70 px-2 py-0.5">
+                            ✓ Identity card
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded bg-blue-100/70 px-2 py-0.5">
+                            ✓ Address proof
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded bg-blue-100/70 px-2 py-0.5">
+                            ✓ Income certificate
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="caseType">Case type</Label>
+                    <Label htmlFor="caseType">Specific case type</Label>
                     <Controller
                       control={control}
                       name="caseType"
                       render={({ field }) => (
                         <Select
                           value={field.value}
-                          onValueChange={field.onChange}
+                          onValueChange={(val) => {
+                            field.onChange(val)
+                            if (isIdentityCase(val as CaseType)) {
+                              setSubmissionCategory("person")
+                            } else {
+                              setSubmissionCategory("claim")
+                            }
+                          }}
                           disabled={Boolean(createdCase && uploadedDocs.length > 0)}
                         >
                           <SelectTrigger id="caseType" aria-invalid={Boolean(errors.caseType)}>
                             <SelectValue placeholder="Select a case type" />
                           </SelectTrigger>
                           <SelectContent>
-                            {CASE_TYPES.map((type) => (
-                              <SelectItem key={type} value={type}>
-                                {CASE_TYPE_LABELS[type]}
-                              </SelectItem>
-                            ))}
+                            {submissionCategory === "person" ? (
+                              <>
+                                <SelectItem value="identity_verification">
+                                  {CASE_TYPE_LABELS["identity_verification"]}
+                                </SelectItem>
+                                <SelectItem value="hiring_verification">
+                                  {CASE_TYPE_LABELS["hiring_verification"]}
+                                </SelectItem>
+                              </>
+                            ) : (
+                              CASE_TYPES.filter((t) => !isIdentityCase(t)).map((type) => (
+                                <SelectItem key={type} value={type}>
+                                  {CASE_TYPE_LABELS[type]}
+                                </SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                       )}
@@ -364,6 +501,50 @@ export function NewCasePage() {
                     )}
                   </div>
 
+                  {/* Family member linkage for identity cases when head has family */}
+                  {isIdentity && isHead && familyData && familyData.members && familyData.members.length > 0 && (
+                    <div className="flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3.5">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="familyMember" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          <UsersIcon className="size-3.5 text-primary" />
+                          Household member bundle (optional)
+                        </Label>
+                        {selectedFamilyMemberId && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedFamilyMemberId(null)}
+                            className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                          >
+                            Clear selection
+                          </button>
+                        )}
+                      </div>
+                      <Select
+                        value={selectedFamilyMemberId || "none"}
+                        onValueChange={(val) => setSelectedFamilyMemberId(val === "none" ? null : val)}
+                        disabled={Boolean(createdCase && uploadedDocs.length > 0)}
+                      >
+                        <SelectTrigger id="familyMember" className="bg-background">
+                          <SelectValue placeholder="Link to household member" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            No family link (standalone verification)
+                          </SelectItem>
+                          {familyData.members.map((member) => (
+                            <SelectItem key={member.id} value={member.id}>
+                              {member.full_name} ({member.relation_label || member.relation})
+                              {member.is_head ? " · Head" : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">
+                        Submitting this bundle for a household member automatically runs cross-member consistency checks (identity, shared address, parent names, birth order).
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex flex-col gap-2">
                     <Label>Supporting documents</Label>
                     <FileDropzone
@@ -372,6 +553,8 @@ export function NewCasePage() {
                       onFileRemoved={removeFile}
                       disabled={isSubmitting}
                       maxFileBytes={maxFileBytes}
+                      acceptedTypes={isIdentity ? ACCEPTED_IDENTITY_UPLOAD_TYPES : ACCEPTED_UPLOAD_TYPES}
+                      hintText={isIdentity ? "PDF, JPG, PNG or TIFF" : "PDF only"}
                     />
                     {filesError && <p className="text-sm text-destructive">{filesError}</p>}
                     {failedCount > 0 && !isSubmitting && (

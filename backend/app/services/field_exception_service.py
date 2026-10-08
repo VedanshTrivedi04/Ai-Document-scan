@@ -89,3 +89,40 @@ def cross_document_regions(
             }
         )
     return regions
+
+
+def identity_finding_regions(field_name: str, evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The same region shape as `cross_document_regions`, for a finding of
+    the identity contradiction check: one region per document whose value
+    was located, captioned with what both documents show."""
+    from app.services.identity_messages import FIELD_LABELS
+
+    label = FIELD_LABELS.get(field_name, field_name.replace("_", " ").capitalize())
+    regions: list[dict[str, Any]] = []
+    for item in evidence:
+        box = valid_box(item.get("bounding_box"))
+        if box is None:
+            continue
+        others = [
+            {
+                "document_id": o.get("document_id"),
+                "document_filename": o.get("document_filename"),
+                "value": o.get("value"),
+            }
+            for o in evidence if o is not item
+        ]
+        regions.append(
+            {
+                "document_id": item.get("document_id"),
+                "document_filename": item.get("document_filename"),
+                "field": field_name,
+                "label": label,
+                "value": item.get("value"),
+                "caption": f"{label}: {item.get('value')} (other document: "
+                + " / ".join(str(o["value"]) for o in others)
+                + ")",
+                "other": others,
+                "bounding_box": box,
+            }
+        )
+    return regions

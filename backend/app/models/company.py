@@ -33,6 +33,10 @@ class Company(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="true", nullable=False
     )
+    # The label this company is reached at, e.g. "indore" for
+    # indore.<base domain> (app/services/subdomains.py). Decides whose
+    # sign-in page a request is for; data isolation does not depend on it.
+    subdomain: Mapped[str | None] = mapped_column(String(63), nullable=True, unique=True)
     # Upload limits, a per-company capacity / plan-tier lever that only a
     # platform admin changes (app/api/platform.py). Stored on the row at
     # creation time from the then-current defaults, so changing the default

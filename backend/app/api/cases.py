@@ -15,7 +15,7 @@ escalate) live in app/api/case_actions.py.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, case as sql_case, false, func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -23,11 +23,14 @@ from app.api.auth import get_tenant_db, require_company_role
 from app.api.case_access import can_act_on_case, load_visible_case
 from app.api.tenant_access import CaseScope, CompanyScope, company_scope, get_case_scope
 from app.models.audit_log import AuditLog
-from app.models.case import Case, CaseStatus, CaseTier, CaseType
+from app.models.case import Case, CaseStatus, CaseTier, CaseType, is_identity_case_type
 from app.models.case_action import CaseAction, CaseActionType
 from app.models.document import Document
+from app.models.family import Family, FamilyMember
 from app.models.user import User, UserRole, has_rank, role_label
 from app.schemas.case import (
+    CaseFamilyMember,
+    FindingCounts,
     AuditLogEntrySchema,
     CaseActionSchema,
     PipelineStatusSchema,
@@ -46,6 +49,8 @@ from app.services.audit_service import record_event
 from app.services.case_flag_service import get_case_flag, get_case_flags, get_forensic_findings
 from app.services.risk_scoring_service import latest_assessment, pipeline_status
 from app.services.storage_service import StorageService, ensure_company_blob, get_storage_service
+from app.services.identity_messages import warm_up as warm_up_messages
+from app.services.translation_service import normalize_language
 from app.services.usage_service import record_case_created
 
 router = APIRouter(prefix="/cases", tags=["cases"])
@@ -103,10 +108,27 @@ def create_case(
     current_user: User = Depends(require_company_role(UserRole.user)),
     db: Session = Depends(get_tenant_db),
 ) -> Case:
+    if payload.family_member_id is not None:
+        # Only the head of the family submits for its members.
+        owned = db.execute(
+            select(FamilyMember.id)
+            .join(Family, Family.id == FamilyMember.family_id)
+            .where(
+                FamilyMember.id == payload.family_member_id,
+                FamilyMember.company_id == current_user.company_id,
+                Family.head_user_id == current_user.id,
+            )
+        ).first()
+        if owned is None:
+            raise HTTPException(422, "That family member is not in a family you are the head of.")
+        if not is_identity_case_type(payload.case_type):
+            raise HTTPException(422, "A family member can only be set on an identity or hiring verification case.")
+
     case_id = uuid.uuid4()
     case = Case(
         id=case_id,
         company_id=current_user.company_id,
+        family_member_id=payload.family_member_id,
         # Derived from the case's own id, so it's unique for free and needs
         # no separate sequence/counter table.
         case_number=f"CASE-{case_id.hex[:8].upper()}",
@@ -126,7 +148,10 @@ def create_case(
         "case_created",
         case_id=case.id,
         actor_user_id=current_user.id,
-        event_data={"case_type": payload.case_type.value},
+        event_data={
+            "case_type": payload.case_type.value,
+            **({"family_member_id": str(payload.family_member_id)} if payload.family_member_id else {}),
+        },
     )
     record_case_created(db, current_user.company_id)
 
@@ -234,6 +259,11 @@ def list_cases(
 )
 def get_case_detail(
     case_id: uuid.UUID,
+    lang: str = Query(
+        default="en",
+        description="Language of each finding's `message` (see GET /i18n/languages). "
+        "An unsupported code gives English.",
+    ),
     scope: CaseScope = Depends(get_case_scope),
     storage: StorageService = Depends(get_storage_service),
 ) -> CaseDetail:
@@ -256,8 +286,11 @@ def get_case_detail(
         for doc in sorted(case.documents, key=lambda d: d.created_at)
     ]
     documents_by_id = {str(d.id): d for d in case.documents}
+    language = normalize_language(lang)
+    if case.cross_document_findings:
+        warm_up_messages(language)
     cross_document_findings = [
-        CrossDocumentFindingSummary.from_finding(finding, documents_by_id)
+        CrossDocumentFindingSummary.from_finding(finding, documents_by_id, language)
         for finding in sorted(case.cross_document_findings, key=lambda f: f.created_at)
     ]
     forensic_findings = [
@@ -319,8 +352,20 @@ def get_case_detail(
             current_user, CaseFlagSchema.from_case_flag(get_case_flag(db, case.company_id, case.id))
         ),
         can_act=can_act_on_case(current_user, case),
+        family_member=(
+            CaseFamilyMember(
+                id=case.family_member.id,
+                family_id=case.family_member.family_id,
+                full_name=case.family_member.full_name,
+                relation=case.family_member.relation,
+            )
+            if case.family_member_id
+            else None
+        ),
         documents=documents,
         cross_document_findings=cross_document_findings,
+        finding_counts=FindingCounts.from_findings(cross_document_findings),
+        language=language,
         forensic_findings=forensic_findings,
         assessment=(
             RiskAssessmentSchema.from_assessment(

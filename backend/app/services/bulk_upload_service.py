@@ -53,6 +53,7 @@ import unicodedata
 import uuid
 import zipfile
 import zlib
+from functools import partial
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any, BinaryIO, Callable
@@ -64,7 +65,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.config import settings
 from app.models.base import utcnow
 from app.models.bulk_upload import BulkUpload, BulkUploadCase, BulkUploadStatus
-from app.models.case import Case, CaseStatus
+from app.models.case import Case, CaseStatus, is_identity_case_type
 from app.services.audit_service import record_event
 from app.services.document_intake import enqueue_document_pipeline, record_document, store_original
 from app.services.storage_service import StorageService
@@ -441,7 +442,8 @@ class _Accepted:
 
 
 def _validate_case_files(
-    zf: zipfile.ZipFile, infos: list[zipfile.ZipInfo], case: dict[str, Any], max_file_bytes: int
+    zf: zipfile.ZipFile, infos: list[zipfile.ZipInfo], case: dict[str, Any], max_file_bytes: int,
+    *, allow_images: bool = False,
 ) -> list[_Accepted]:
     accepted: list[_Accepted] = []
     for item in case["files"]:
@@ -449,7 +451,9 @@ def _validate_case_files(
             continue  # rejected structurally in the plan
         try:
             content = _extract(zf, infos[item["entry_index"]], max_file_bytes)
-            validated = validate_upload(content, item["name"], max_bytes=max_file_bytes)
+            validated = validate_upload(
+                content, item["name"], max_bytes=max_file_bytes, allow_images=allow_images
+            )
         except UploadRejected as rejection:
             item.update(status="rejected", code=rejection.code, message=rejection.message)
             continue
@@ -504,12 +508,15 @@ def ingest(
 ) -> None:
     """Ingest one stored zip: case by case, validate → store → create →
     queue. `db` is bound to `company_id`. Safe to re-run (see module doc)."""
-    enqueue = enqueue or enqueue_document_pipeline
     bulk = db.execute(
         select(BulkUpload).where(BulkUpload.id == bulk_upload_id, BulkUpload.company_id == company_id)
     ).scalar_one_or_none()
     if bulk is None or bulk.status in (BulkUploadStatus.complete, BulkUploadStatus.failed):
         return
+    if enqueue is None:
+        enqueue = enqueue_document_pipeline
+        if is_identity_case_type(bulk.case_type):
+            enqueue = partial(enqueue_document_pipeline, forensics=False)
     bulk.status = BulkUploadStatus.ingesting
     bulk.started_at = bulk.started_at or utcnow()
     pending_ids = db.execute(
@@ -578,7 +585,8 @@ def _ingest_case(
     before = copy.deepcopy(row.files)
     entry = {"folder": row.folder, "files": copy.deepcopy(row.files)}
     # CPU work and blob uploads: no transaction is open here.
-    accepted = _validate_case_files(zf, infos, entry, max_file_bytes)
+    options = {"allow_images": True} if is_identity_case_type(bulk.case_type) else {}
+    accepted = _validate_case_files(zf, infos, entry, max_file_bytes, **options)
     if not accepted:
         row.status = "failed"
         row.error_code = "case_no_valid_documents"

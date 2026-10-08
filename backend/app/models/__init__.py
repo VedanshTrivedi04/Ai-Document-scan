@@ -13,6 +13,7 @@ from app.models.company import Company, TenantScopedMixin
 from app.models.company_usage_stats import CompanyUsageStats
 from app.models.cross_document_finding import CrossDocumentFinding, FindingSeverity
 from app.models.document import Document
+from app.models.family import Family, FamilyMember
 from app.models.document_check import DocumentCheck, DocumentCheckStatus, DocumentCheckType
 from app.models.document_page_hash import DocumentPageHash
 from app.models.issuer_registry import IssuerRegistry, IssuerType
@@ -30,6 +31,8 @@ __all__ = [
     "BulkUploadCase",
     "BulkUploadStatus",
     "Company",
+    "Family",
+    "FamilyMember",
     "CompanyUsageStats",
     "TenantScopedMixin",
     "User",

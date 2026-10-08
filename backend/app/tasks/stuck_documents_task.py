@@ -40,6 +40,7 @@ from app.core.config import settings
 from app.db.session import SessionLocal, system_session
 from app.models.audit_log import AuditLog
 from app.models.base import utcnow
+from app.models.case import is_identity_case_type
 from app.models.document import Document, DocumentProcessingStatus
 from app.services.audit_service import record_event
 from app.services.document_intake import enqueue_document_pipeline
@@ -140,7 +141,8 @@ def requeue_stuck(trigger: str = "scheduled") -> dict:
                 _give_up(document.id, document.company_id, document.case_id, attempts)
                 failed.append(str(document.id))
                 continue
-            if not enqueue_document_pipeline(document.id, document.company_id):
+            options = {"forensics": False} if is_identity_case_type(document.case.case_type) else {}
+            if not enqueue_document_pipeline(document.id, document.company_id, **options):
                 break  # broker went away mid-run; the next run tries again
             record_event(
                 db,

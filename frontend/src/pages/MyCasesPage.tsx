@@ -15,13 +15,14 @@ import { useQuery } from "@tanstack/react-query"
 import { listCases } from "@/api/cases"
 import { useAuth } from "@/hooks/useAuth"
 import { Nav } from "@/design-system/Nav"
-import { CASE_TYPE_LABELS, type CaseListItem } from "@/types/case"
+import { CASE_TYPES, CASE_TYPE_LABELS, type CaseListItem } from "@/types/case"
 
 interface MyCaseItem {
   id: string
   caseNumber: string
   filename: string
   type: string
+  rawCaseType: string
   docCount: number
   status: "Action Required" | "In Progress" | "Awaiting Review" | "Cleared"
   statusTone: "rose" | "blue" | "amber" | "emerald"
@@ -51,6 +52,7 @@ function mapApiToMyCase(c: CaseListItem): MyCaseItem {
     caseNumber: c.case_number,
     filename: `${c.case_number}.pdf`,
     type: CASE_TYPE_LABELS[c.case_type] || c.case_type,
+    rawCaseType: c.case_type,
     docCount: c.document_count,
     status,
     statusTone,
@@ -63,6 +65,7 @@ export function MyCasesPage() {
   const { token, user } = useAuth()
   const [search, setSearch] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("")
+  const [typeFilter, setTypeFilter] = React.useState("")
 
   const { data: apiCases, isLoading } = useQuery({
     queryKey: ["cases", token],
@@ -87,9 +90,10 @@ export function MyCasesPage() {
         }
       }
       if (statusFilter && c.status !== statusFilter) return false
+      if (typeFilter && c.rawCaseType !== typeFilter) return false
       return true
     })
-  }, [allMyCases, search, statusFilter])
+  }, [allMyCases, search, statusFilter, typeFilter])
 
   const totalSubmitted = allMyCases.length
   const underReviewCount = allMyCases.filter((c) => c.status === "Awaiting Review" || c.status === "In Progress").length
@@ -222,10 +226,28 @@ export function MyCasesPage() {
               <ChevronDownIcon className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
 
+            <div className="relative flex-1 sm:flex-initial">
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                aria-label="Filter by case type"
+                className="w-full sm:w-auto appearance-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-medium pl-3.5 pr-8 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition shadow-2xs whitespace-nowrap"
+              >
+                <option value="">Type: All Types</option>
+                {CASE_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    Type: {CASE_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+              <ChevronDownIcon className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
+
             <button
               onClick={() => {
                 setSearch("")
                 setStatusFilter("")
+                setTypeFilter("")
               }}
               className="text-xs text-slate-500 hover:text-slate-800 font-medium px-2 py-2 transition shrink-0 cursor-pointer"
               type="button"

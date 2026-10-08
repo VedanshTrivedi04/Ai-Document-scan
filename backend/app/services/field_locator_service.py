@@ -65,7 +65,23 @@ _CONTEXT: dict[str, tuple[tuple[str, ...], tuple[str, ...], bool]] = {
     "date": (("date", "issued", "تاريخ"), ("due", "payment", "استحقاق"), False),
     "reference_number": (("invoice", "ref", "no", "number", "#", "رقم", "فاتورة"), (), False),
     "issuer": ((), (), False),
+    # Identity bundles (app/services/identity_documents.py).
+    "full_name": (
+        ("name", "नाम"),
+        ("father", "mother", "husband", "guardian", "s/o", "d/o", "w/o", "c/o", "पिता", "पति", "माता"),
+        False,
+    ),
+    "parent_or_spouse_name": (
+        ("father", "mother", "husband", "guardian", "s/o", "d/o", "w/o", "c/o", "पिता", "पति", "माता"),
+        (),
+        False,
+    ),
+    "date_of_birth": (("birth", "dob", "d.o.b", "जन्म"), ("issue", "valid", "expiry"), False),
+    "issue_date": (("issue", "issued", "dated", "जारी"), ("birth", "dob", "जन्म"), False),
+    "annual_income": (("income", "annual", "आय"), ("month", "monthly"), False),
+    "id_number": (("no", "number", "id", "संख्या", "क्रमांक"), (), False),
 }
+_IDENTITY_DATE_FIELDS = ("date_of_birth", "issue_date")
 
 _DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%B %d, %Y", "%d %B %Y", "%b %d, %Y", "%d %b %Y")
 _ARABIC = re.compile(r"[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]")
@@ -298,6 +314,37 @@ def _locate(
     return _fuzzy_line(pages, text)
 
 
+def _locate_identity(
+    pages: list[OCRPage], pages_words: list[list[_W]], name: str, field: dict[str, Any], used: set
+) -> _Candidate | None:
+    """One field of an identity document. A name or address is searched as
+    printed, then by its Latin form (a document that prints both scripts)."""
+    if name in _IDENTITY_DATE_FIELDS:
+        for target in _date_targets(field):
+            found = _text_candidates(pages_words, target)
+            if found:
+                return _pick(found, name, used)
+        return None
+
+    value = field.get("value")
+    if name == "annual_income" and isinstance(value, (int, float)) and not isinstance(value, bool):
+        candidates: list[_Candidate] = []
+        for words in pages_words:
+            candidates += _numeric_matches(words, float(value), field.get("currency"))
+        return _pick(candidates, name, used)
+
+    targets = [str(t) for t in (field.get("raw_text"), value, field.get("latin")) if t]
+    for target in targets:
+        found = _text_candidates(pages_words, target)
+        if found:
+            return _pick(found, name, used)
+    for target in targets:
+        line = _fuzzy_line(pages, target)
+        if line is not None:
+            return line
+    return None
+
+
 def _as_box(candidate: _Candidate) -> dict[str, float | int]:
     return {
         "page": candidate.page,
@@ -326,6 +373,15 @@ def attach_field_locations(pages: list[OCRPage], extracted_fields: dict[str, Any
         if not isinstance(field, dict) or field.get("bounding_box"):
             continue
         candidate = _locate(pages, pages_words, name, field, used, core=True)
+        if candidate is not None:
+            field["bounding_box"] = _as_box(candidate)
+            used.add(candidate.key)
+            located += 1
+
+    for name, field in (extracted_fields.get("identity_fields") or {}).items():
+        if not isinstance(field, dict) or field.get("bounding_box"):
+            continue
+        candidate = _locate_identity(pages, pages_words, name, field, used)
         if candidate is not None:
             field["bounding_box"] = _as_box(candidate)
             used.add(candidate.key)

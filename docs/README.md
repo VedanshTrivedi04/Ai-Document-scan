@@ -12,6 +12,21 @@ These docs describe the system **as implemented**, checked against the code. The
 current build, and those outside its scope, are collected in the table in
 [architecture/overview.md](architecture/overview.md#scope-of-the-current-build).
 
+## Document Contradiction Detector
+
+Built on this platform for the problem statement "AI-Based Document Contradiction Detector for Public
+Systems": one person's documents are compared with each other, harmless differences are ignored and real
+conflicts are flagged for a reviewer.
+
+| If you want to… | Read |
+|---|---|
+| Know what it does, how it decides and how it did on the test bundles | [CONTRADICTION_DETECTOR_REPORT.md](CONTRADICTION_DETECTOR_REPORT.md) |
+| Present it | [DEMO_SCRIPT.md](DEMO_SCRIPT.md) |
+| See what each phase built, with its API contract | [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md) |
+| Read the original design | [CONTRADICTION_DETECTOR_PLAN.md](CONTRADICTION_DETECTOR_PLAN.md) |
+
+The rest of this documentation describes the platform it is built on.
+
 ## Start here
 
 | If you want to… | Read |

@@ -52,6 +52,7 @@ export function hasRank(role: UserRole | undefined, minimum: CompanyRole): boole
 export interface TokenResponse {
   access_token: string
   token_type: string
+  company_subdomain?: string | null
 }
 
 export interface CurrentUser {
@@ -64,4 +65,5 @@ export interface CurrentUser {
   is_platform_admin: boolean
   company_id: string | null
   company_name: string | null
+  company_subdomain?: string | null
 }

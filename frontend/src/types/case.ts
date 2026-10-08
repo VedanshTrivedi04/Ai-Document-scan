@@ -3,14 +3,16 @@
 // SPECIFICATION.md section 2 (Forms: React Hook Form + Zod, "schema validation
 // mirrored from backend Pydantic models").
 
-  export const CASE_TYPES = [
-    "school_document",
-    "vendor_invoice",
-    "commercial_invoice",
-    "procurement_documentation",
-    "quotation",
-    "travel_reimbursement",
-    "other",
+export const CASE_TYPES = [
+  "school_document",
+  "vendor_invoice",
+  "commercial_invoice",
+  "procurement_documentation",
+  "quotation",
+  "travel_reimbursement",
+  "other",
+  "identity_verification",
+  "hiring_verification",
 ] as const
 
 export type CaseType = (typeof CASE_TYPES)[number]
@@ -23,6 +25,12 @@ export const CASE_TYPE_LABELS: Record<CaseType, string> = {
   quotation: "Quotation",
   travel_reimbursement: "Travel / accommodation reimbursement",
   other: "Other",
+  identity_verification: "Identity verification",
+  hiring_verification: "Hiring verification",
+}
+
+export function isIdentityCase(caseType: CaseType | string | null | undefined): boolean {
+  return caseType === "identity_verification" || caseType === "hiring_verification"
 }
 
 export const CASE_STATUSES = [
@@ -38,12 +46,7 @@ export const CASE_STATUSES = [
 ] as const
 
 // Mirrors backend/app/services/classification_service.py's
-// DOCUMENT_TYPE_LABELS — the per-DOCUMENT classification list. Distinct
-// from CaseType above: a case is filed as one type (e.g. "vendor
-// invoice"), but in practice its documents split into the claim itself
-// (an invoice/quotation/etc) plus one or more documents proving it (a
-// payment slip, bank confirmation, or confirmation email) — see
-// getDocumentRole below.
+// DOCUMENT_TYPE_LABELS & identity_documents.py IDENTITY_DOCUMENT_TYPE_LABELS
 export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   school_document: "School / educational document",
   vendor_invoice: "Vendor invoice",
@@ -52,8 +55,39 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   quotation: "Quotation",
   travel_invoice: "Travel / accommodation invoice",
   payment_evidence: "Payment evidence",
+  national_id_card: "Identity card",
+  tax_id_card: "Tax identity card",
+  voter_id_card: "Voter identity card",
+  driving_licence: "Driving licence",
+  passport: "Passport",
+  birth_certificate: "Birth certificate",
+  income_certificate: "Income certificate",
+  address_proof: "Address proof",
+  caste_certificate: "Caste certificate",
+  domicile_certificate: "Domicile certificate",
+  marksheet: "Marksheet",
+  degree_certificate: "Degree certificate",
+  experience_letter: "Experience letter",
+  payslip: "Payslip",
   other: "Other",
 }
+
+export const IDENTITY_DOCUMENT_TYPES = [
+  "national_id_card",
+  "tax_id_card",
+  "voter_id_card",
+  "driving_licence",
+  "passport",
+  "birth_certificate",
+  "income_certificate",
+  "address_proof",
+  "caste_certificate",
+  "domicile_certificate",
+  "marksheet",
+  "degree_certificate",
+  "experience_letter",
+  "payslip",
+] as const
 
 export type DocumentRole = "claim" | "evidence" | "other" | "pending"
 
@@ -66,7 +100,7 @@ export type DocumentRole = "claim" | "evidence" | "other" | "pending"
 export function getDocumentRole(documentType: string | null): DocumentRole {
   if (documentType === null) return "pending"
   if (documentType === "payment_evidence") return "evidence"
-  if (documentType === "other") return "other"
+  if (documentType === "other" || (IDENTITY_DOCUMENT_TYPES as readonly string[]).includes(documentType)) return "other"
   return "claim"
 }
 
@@ -198,15 +232,83 @@ export interface CoreFields {
   tax_rate: NumericFieldValue
 }
 
-// Shape written by the OCR + classification + extraction Celery task
-// (backend/app/tasks/document_processing.py) into
-// documents.extracted_fields. Only present once processing_status is
-// "complete".
-export interface ExtractedFields {
+export interface IdentityPersonNameField {
+  value: string | null
+  latin: string | null
+  confidence: number
+  uncertain: boolean
+  bounding_box?: BoundingBox
+}
+
+export interface IdentityAddressField {
+  value: string | null
+  latin: string | null
+  postal_code: string | null
+  confidence: number
+  uncertain: boolean
+  bounding_box?: BoundingBox
+}
+
+export interface IdentityGenderField {
+  value: "male" | "female" | "other" | null
+  raw_text: string | null
+  confidence: number
+  uncertain: boolean
+  bounding_box?: BoundingBox
+}
+
+export interface IdentityDateField {
+  value: string | null // YYYY-MM-DD
+  raw_text: string | null
+  confidence: number
+  uncertain: boolean
+  bounding_box?: BoundingBox
+}
+
+export interface IdentityStringField {
+  value: string | null
+  confidence: number
+  uncertain: boolean
+  bounding_box?: BoundingBox
+}
+
+export interface IdentityIncomeField {
+  value: number | null
+  currency: string | null
+  raw_text: string | null
+  confidence: number
+  uncertain: boolean
+  bounding_box?: BoundingBox
+}
+
+export interface IdentityFields {
+  full_name: IdentityPersonNameField
+  parent_or_spouse_name: IdentityPersonNameField
+  date_of_birth: IdentityDateField
+  gender: IdentityGenderField
+  address: IdentityAddressField
+  id_number: IdentityStringField
+  annual_income: IdentityIncomeField
+  issuing_authority: IdentityStringField
+  issue_date: IdentityDateField
+}
+
+export interface InvoiceExtractedFields {
+  schema?: "invoice"
   document_type_confidence: number
   core_fields: CoreFields
   additional_fields: ExtractedAdditionalField[]
 }
+
+export interface IdentityExtractedFields {
+  schema: "identity"
+  document_type_confidence: number
+  identity_fields: IdentityFields
+  core_fields: CoreFields
+  additional_fields: ExtractedAdditionalField[]
+}
+
+export type ExtractedFields = InvoiceExtractedFields | IdentityExtractedFields
 
 // One document_checks row (backend/app/models/document_check.py). `result`
 // is whatever shape that check_type produces — see the individual check
@@ -333,13 +435,77 @@ export interface CaseDetailDocument {
   checks: DocumentCheck[]
 }
 
+export type FindingSeverity = "info" | "low" | "medium" | "high" | "critical"
+
+export type FindingClassification = "harmless_variant" | "conflict"
+
+export interface FindingEvidence {
+  document_id: string
+  document_type: string
+  document_filename: string
+  value: string
+  bounding_box: BoundingBox | null
+  distinguish_by_filename?: boolean
+}
+
+export interface FindingMessage {
+  language: string
+  field_label: string
+  severity_label: string
+  summary: string
+  explanation: string
+  action: string
+  text: string
+}
+
+export type FindingReviewStatus = "pending" | "accepted" | "dismissed"
+
+export type FindingResolution = "open" | "conflict_confirmed" | "no_issue"
+
+export interface FindingCounts {
+  open: number
+  conflict_confirmed: number
+  no_issue: number
+  ignored_as_harmless: number
+}
+
+export interface LanguageInfo {
+  code: string
+  name: string
+  native_name: string
+  direction: "ltr" | "rtl"
+  source: "source" | "google" | "built_in" | "unavailable" | string
+  available: boolean
+}
+
+export interface I18nCatalog {
+  language: string
+  direction: "ltr" | "rtl"
+  fields: Record<string, string>
+  documents: Record<string, string>
+  severities: Record<string, string>
+  reasons: Record<string, string>
+  actions: Record<string, string>
+  no_action: string
+}
+
+export interface FindingReviewPayload {
+  decision: "accepted" | "dismissed" | "pending"
+  note?: string | null
+}
+
+export interface FindingReviewResponse {
+  finding: CrossDocumentFinding
+  finding_counts: FindingCounts
+}
+
 // One cross_document_findings row (backend/app/models/cross_document_
 // finding.py) — case-level, not per-document (SPECIFICATION.md section 3.1).
 export interface CrossDocumentFinding {
   id: string
   field_name: string
   finding_type: string
-  severity: "info" | "low" | "medium" | "high"
+  severity: FindingSeverity
   description: string
   document_ids: string[] | null
   created_at: string
@@ -347,6 +513,31 @@ export interface CrossDocumentFinding {
   // captioned with what the OTHER document showed (see backend/app/services/
   // field_exception_service.py). Drawn on that document's page.
   regions: CrossDocumentRegion[]
+  // Set by identity contradiction check (Phase 3); null on invoice reconciliation.
+  classification?: FindingClassification | null
+  reason?: string | null
+  evidence?: FindingEvidence[] | null
+  detail?: Record<string, unknown> | null
+  // Phase 4: localized structured message
+  message?: FindingMessage | null
+  // Reviewer decision and tracking
+  review_status?: FindingReviewStatus
+  review_note?: string | null
+  reviewed_at?: string | null
+  reviewed_by_name?: string | null
+  resolution?: FindingResolution
+}
+
+export const IDENTITY_FIELD_LABELS: Record<string, string> = {
+  full_name: "Name",
+  parent_or_spouse_name: "Parent / spouse name",
+  date_of_birth: "Date of birth",
+  gender: "Gender",
+  address: "Address",
+  id_number: "ID number",
+  annual_income: "Annual income",
+  issuing_authority: "Issued by",
+  issue_date: "Issue date",
 }
 
 export interface CrossDocumentRegion extends FieldRegion {
@@ -460,10 +651,20 @@ export interface CaseDecisionResponse {
   action: CaseAction
 }
 
+export interface CaseFamilyMember {
+  id: string
+  family_id: string
+  full_name: string
+  relation: string
+}
+
 export interface CaseDetail extends CaseListItem {
+  family_member?: CaseFamilyMember | null
   documents: CaseDetailDocument[]
   forensic_findings: ForensicFinding[]
   cross_document_findings: CrossDocumentFinding[]
+  finding_counts?: FindingCounts
+  language?: string
   assessment: RiskAssessment | null
   pipeline: PipelineStatus
   actions: CaseAction[]
@@ -568,4 +769,126 @@ export interface SignatureReferenceCreatePayload {
     height: number
   }
   is_library: boolean
+}
+
+// ==========================================
+// Phase 6: Verified Profile and Pre-filled Forms
+// ==========================================
+
+export type ProfileFieldStatus = "agreed" | "conflict" | "chosen" | "missing"
+
+export interface ProfileFieldCandidate {
+  value: string | number | null
+  display_value: string | null
+  latin: string | null
+  document_id: string
+  document_type: string | null
+  document_filename: string
+  document_ids: string[]
+}
+
+export interface ProfileFieldEntry {
+  field: "full_name" | "parent_or_spouse_name" | "date_of_birth" | "gender" | "address" | "annual_income" | string
+  label: string
+  status: ProfileFieldStatus
+  value: string | number | null
+  display_value: string | null
+  latin: string | null
+  document_id: string | null
+  document_type: string | null
+  document_filename: string | null
+  candidates: ProfileFieldCandidate[]
+  suggested_document_id: string | null
+  documents_to_correct: string[]
+}
+
+export interface ProfileIdNumberEntry {
+  value: string | null
+  display_value: string | null
+  latin: string | null
+  document_id: string
+  document_type: string | null
+  document_filename: string
+}
+
+export interface CaseProfileCounts {
+  agreed: number
+  chosen: number
+  conflict: number
+  missing: number
+}
+
+export interface CaseProfile {
+  case_id: string
+  case_number: string
+  case_type: string
+  document_count: number
+  checks_complete: boolean
+  fields: ProfileFieldEntry[]
+  postal_code: string | null
+  id_numbers: Record<string, ProfileIdNumberEntry>
+  counts: CaseProfileCounts
+  ready: boolean
+}
+
+export interface FormSummaryField {
+  key: string
+  label: string
+  type: string
+  required: boolean
+  prefilled: boolean
+}
+
+export interface FormTemplateSummary {
+  id: string
+  title: string
+  description: string
+  case_types: string[]
+  field_count: number
+  prefilled_field_count: number
+  fields: FormSummaryField[]
+}
+
+export interface FormFieldOption {
+  value: string
+  label: string
+}
+
+export interface PrefilledFormField {
+  key: string
+  label: string
+  type: "text" | "textarea" | "date" | "number" | "select"
+  required: boolean
+  prefilled: boolean
+  options?: FormFieldOption[]
+  value: string | number | null
+  display_value: string | null
+  status: "filled" | "needs_attention" | "to_fill"
+  note: string | null
+  source_field: string | null
+  source_document_id: string | null
+  source_document_type: string | null
+  source_document_filename: string | null
+}
+
+export interface PrefilledFormCounts {
+  filled: number
+  needs_attention: number
+  to_fill: number
+}
+
+export interface PrefilledFormResponse {
+  case_id: string
+  case_number: string
+  checks_complete: boolean
+  language: string
+  form: {
+    id: string
+    title: string
+    description: string
+    case_types: string[]
+  }
+  fields: PrefilledFormField[]
+  counts: PrefilledFormCounts
+  ready: boolean
 }

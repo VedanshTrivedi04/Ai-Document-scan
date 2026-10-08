@@ -14,6 +14,10 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str = Field(description="JWT. Send as `Authorization: Bearer <token>`.")
     token_type: str = Field(default="bearer", description="Always `bearer`.")
+    company_subdomain: str | None = Field(
+        default=None,
+        description="The subdomain of the user's organisation, if it has one: where this sign-in belongs.",
+    )
 
 
 class CurrentUserResponse(BaseModel):
@@ -28,6 +32,7 @@ class CurrentUserResponse(BaseModel):
     is_platform_admin: bool = Field(description="True for platform admins, who belong to no company.")
     company_id: uuid.UUID | None = Field(description="The user's company; null for a platform admin.")
     company_name: str | None = Field(description="Display name of the user's company.")
+    company_subdomain: str | None = Field(default=None, description="The company's subdomain, if it has one.")
 
 
 class UploadLimitsResponse(BaseModel):

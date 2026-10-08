@@ -31,6 +31,7 @@ from sqlalchemy import select
 from app.api.auth import require_company_role
 from app.api.case_access import load_visible_case
 from app.api.tenant_access import CaseScope, get_case_scope
+from app.models.case import is_identity_case_type
 from app.models.document import Document
 from app.models.user import User, UserRole
 from app.schemas.document import DocumentFileUrlResponse, DocumentResponse
@@ -65,7 +66,9 @@ router = APIRouter(prefix="/cases", tags=["documents"])
         "header bytes (not its name), a matching extension, and locally parseable (not corrupted, "
         "not password-protected). A rejection returns `detail: {code, message, ...}` with one of "
         "the codes `file_empty`, `file_too_large`, `unsupported_file_type`, `file_type_mismatch`, "
-        "`file_corrupted`, `file_password_protected`. Each pipeline step is its own task on a shared, "
+        "`file_corrupted`, `file_password_protected`. A case of type `identity_verification` or "
+        "`hiring_verification` also accepts JPEG, PNG and TIFF images, and only extraction is "
+        "queued for it (no forensic checks). Each pipeline step is its own task on a shared, "
         "FIFO queue (see app/tasks/celery_app.py). A `user` may upload only to a case they "
         "submitted; reviewers to any case of their company; platform admins never (403)."
     ),
@@ -92,7 +95,8 @@ async def upload_document(
     # their company.
     db = scope.db
     company_id = scope.company_id
-    load_visible_case(db, case_id, current_user)
+    # An identity bundle takes images too and skips the forensic checks.
+    identity_case = is_identity_case_type(load_visible_case(db, case_id, current_user).case_type)
     # This company's limit, read fresh on every request (a platform admin's
     # change applies to the next upload, no new sign-in needed).
     max_bytes = company_upload_limits(db, company_id).max_file_bytes
@@ -110,7 +114,7 @@ async def upload_document(
             check_size(file.size if file.size is not None else len(content), max_bytes)
         # Parsing a 10 MB PDF is CPU work — keep it off the event loop.
         validated = await run_in_threadpool(
-            validate_upload, content, file.filename, max_bytes=max_bytes
+            validate_upload, content, file.filename, max_bytes=max_bytes, allow_images=identity_case
         )
     except UploadRejected as rejection:
         raise HTTPException(status_code=rejection.status_code, detail=rejection.detail()) from None
@@ -141,7 +145,7 @@ async def upload_document(
     db.refresh(document)
 
     # Only after the commit, so a worker never sees an id it can't load.
-    enqueue_document_pipeline(document.id, company_id)
+    enqueue_document_pipeline(document.id, company_id, forensics=not identity_case)
 
     try:
         signed_url = storage.get_download_url(document.blob_storage_path)

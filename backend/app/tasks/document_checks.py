@@ -25,13 +25,16 @@ from sqlalchemy.orm import Session
 
 from app.db import tenancy
 from app.db.session import SessionLocal
-from app.models.cross_document_finding import CrossDocumentFinding
+from app.models.case import Case, is_identity_case_type
+from app.models.cross_document_finding import REVIEW_PENDING, CrossDocumentFinding
 from app.models.document import Document, DocumentProcessingStatus
 from app.models.document_check import DocumentCheck, DocumentCheckStatus, DocumentCheckType
 from app.services.audit_service import record_event
 from app.services.check_store import save_check
 from app.services.cross_document_service import find_cross_document_mismatches
 from app.services.field_validation_service import validate_fields
+from app.services.identity_comparison import BundleDocument, find_identity_contradictions
+from app.services.identity_documents import is_identity_extraction
 from app.services.issuer_service import verify_issuer
 from app.services.llm_service import LLMConfigurationError, get_llm_service
 from app.services.risk_scoring_service import request_case_scoring
@@ -225,6 +228,25 @@ def run_document_checks(document_id: str, company_id: str | None = None) -> None
         db.close()
 
 
+def _finding_key(field_name, document_ids, classification, reason) -> tuple:
+    return (field_name, tuple(sorted(str(i) for i in (document_ids or []))), classification, reason)
+
+
+def _bundle_documents(documents: list[Document]) -> list[BundleDocument]:
+    """The identity documents of a case, oldest first so findings come out
+    in a stable order."""
+    return [
+        BundleDocument(
+            id=str(d.id),
+            filename=d.original_filename,
+            document_type=d.document_type,
+            identity_fields=d.extracted_fields["identity_fields"],
+        )
+        for d in sorted(documents, key=lambda d: (d.created_at, str(d.id)))
+        if is_identity_extraction(d.extracted_fields)
+    ]
+
+
 @celery_app.task(name="run_cross_document_checks")
 def run_cross_document_checks(case_id: str, company_id: str | None = None) -> None:
     company_uuid = resolve_company_for_case(case_id, company_id)
@@ -245,23 +267,51 @@ def run_cross_document_checks(case_id: str, company_id: str | None = None) -> No
         # (e.g. a re-triggered check); cross_document_findings, unlike
         # audit_log, isn't append-only, so clear the previous run's
         # findings before recomputing rather than accumulating stale rows.
-        db.query(CrossDocumentFinding).filter(
-            CrossDocumentFinding.case_id == case_uuid, CrossDocumentFinding.company_id == company_uuid
-        ).delete()
+        previous = db.execute(
+            select(CrossDocumentFinding).where(
+                CrossDocumentFinding.case_id == case_uuid, CrossDocumentFinding.company_id == company_uuid
+            )
+        ).scalars().all()
+        # A decision a reviewer already made survives the re-run, as long as
+        # the same finding comes out again.
+        decided = {
+            _finding_key(f.field_name, f.document_ids, f.classification, f.reason): (
+                f.review_status, f.reviewed_by_user_id, f.reviewed_at, f.review_note
+            )
+            for f in previous
+            if f.review_status != REVIEW_PENDING
+        }
+        for finding in previous:
+            db.delete(finding)
+        db.flush()
 
-        findings = (
-            find_cross_document_mismatches(completed_documents)
-            if len(completed_documents) >= _MIN_DOCUMENTS_FOR_CROSS_DOCUMENT_CHECK
-            else []
-        )
+        case_type = db.execute(
+            select(Case.case_type).where(Case.id == case_uuid, Case.company_id == company_uuid)
+        ).scalar_one_or_none()
+        if len(completed_documents) < _MIN_DOCUMENTS_FOR_CROSS_DOCUMENT_CHECK:
+            findings = []
+        elif is_identity_case_type(case_type):
+            # One person's bundle: contradictions between the documents.
+            findings = find_identity_contradictions(_bundle_documents(completed_documents))
+        else:
+            findings = find_cross_document_mismatches(completed_documents)
         for finding in findings:
-            db.add(CrossDocumentFinding(company_id=company_uuid, case_id=case_uuid, **finding))
+            row = CrossDocumentFinding(company_id=company_uuid, case_id=case_uuid, **finding)
+            key = _finding_key(
+                row.field_name, row.document_ids, finding.get("classification"), finding.get("reason")
+            )
+            if key in decided:
+                row.review_status, row.reviewed_by_user_id, row.reviewed_at, row.review_note = decided[key]
+            db.add(row)
 
         record_event(
             db,
             "cross_document_check_completed",
             case_id=case_uuid,
-            event_data={"finding_count": len(findings)},
+            event_data={
+                "finding_count": len(findings),
+                "conflict_count": sum(1 for f in findings if f.get("classification") == "conflict"),
+            } if is_identity_case_type(case_type) else {"finding_count": len(findings)},
         )
         db.commit()
         request_case_scoring(case_uuid, company_uuid)

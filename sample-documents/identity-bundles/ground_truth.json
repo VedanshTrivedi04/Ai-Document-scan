@@ -1,0 +1,3144 @@
+{
+  "note": "Synthetic test data. Every person, address and number is invented.",
+  "bundles": [
+    {
+      "id": "B01-clean",
+      "title": "All documents agree",
+      "kind": "clean",
+      "case_type": "identity_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Kavita Rao Deshmukh",
+              "latin": "Kavita Rao Deshmukh",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Suresh Rao Deshmukh",
+              "latin": "Suresh Rao Deshmukh",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1990-03-12",
+              "raw_text": "12/03/1990",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "female",
+              "raw_text": "Female",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "22 Tilak Path, Sector 4, Indore, Madhya Pradesh - 452001",
+              "latin": "22 Tilak Path, Sector 4, Indore, Madhya Pradesh - 452001",
+              "postal_code": "452001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 1107",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-tax-id-card.pdf",
+          "document_type": "tax_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Kavita Rao Deshmukh",
+              "latin": "Kavita Rao Deshmukh",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Suresh Rao Deshmukh",
+              "latin": "Suresh Rao Deshmukh",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1990-03-12",
+              "raw_text": "12 March 1990",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "QWKPD4417L",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Revenue Department",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "03-income-certificate.pdf",
+          "document_type": "income_certificate",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Kavita Rao Deshmukh",
+              "latin": "Kavita Rao Deshmukh",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Suresh Rao Deshmukh",
+              "latin": "Suresh Rao Deshmukh",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": "22 Tilak Path, Sector 4, Indore, Madhya Pradesh - 452001",
+              "latin": "22 Tilak Path, Sector 4, Indore, Madhya Pradesh - 452001",
+              "postal_code": "452001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "IC/2026/004417",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": 120000.0,
+              "raw_text": "Rs. 1,20,000",
+              "currency": "INR",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issuing_authority": {
+              "value": "Office of the Sample Tehsildar",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2026-01-10",
+              "raw_text": "10-01-2026",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        }
+      ],
+      "expected_findings": []
+    },
+    {
+      "id": "B02-spelling-variants",
+      "title": "Phonetic spelling and address abbreviations",
+      "kind": "harmless",
+      "case_type": "identity_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Sunita Choudhary",
+              "latin": "Sunita Choudhary",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Ramlal Choudhary",
+              "latin": "Ramlal Choudhary",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1988-07-05",
+              "raw_text": "05/07/1988",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "female",
+              "raw_text": "Female",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "45 Mahatma Gandhi Road, Near Bus Stand, Ujjain, Madhya Pradesh - 456001",
+              "latin": "45 Mahatma Gandhi Road, Near Bus Stand, Ujjain, Madhya Pradesh - 456001",
+              "postal_code": "456001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 2290",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-tax-id-card.pdf",
+          "document_type": "tax_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Suneeta Chowdhary",
+              "latin": "Suneeta Chowdhary",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Ramlal Chowdhary",
+              "latin": "Ramlal Chowdhary",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1988-07-05",
+              "raw_text": "05-07-1988",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "BNTPC8821K",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Revenue Department",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "03-address-proof.pdf",
+          "document_type": "address_proof",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Sunita Choudhary",
+              "latin": "Sunita Choudhary",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": null,
+              "latin": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "date_of_birth": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": "45 M.G. Rd, Nr Bus Stand, Ujjain, MP - 456001",
+              "latin": "45 M.G. Rd, Nr Bus Stand, Ujjain, MP - 456001",
+              "postal_code": "456001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "EB-7741-2290",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample City Power Supply Co.",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2026-02-03",
+              "raw_text": "03-02-2026",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "field": "full_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-tax-id-card.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "spelling_variant",
+          "severity": "info"
+        },
+        {
+          "field": "parent_or_spouse_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-tax-id-card.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "spelling_variant",
+          "severity": "info"
+        },
+        {
+          "field": "full_name",
+          "documents": [
+            "02-tax-id-card.pdf",
+            "03-address-proof.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "spelling_variant",
+          "severity": "info"
+        },
+        {
+          "field": "address",
+          "documents": [
+            "01-national-id-card.pdf",
+            "03-address-proof.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "address_formatting",
+          "severity": "info"
+        }
+      ]
+    },
+    {
+      "id": "B03-initials-and-order",
+      "title": "Initials, honorific and word order",
+      "kind": "harmless",
+      "case_type": "identity_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Ajay Prakash Sharma",
+              "latin": "Ajay Prakash Sharma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Om Prakash Sharma",
+              "latin": "Om Prakash Sharma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1985-11-23",
+              "raw_text": "23/11/1985",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "male",
+              "raw_text": "Male",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "7 Shastri Nagar, Bhopal, Madhya Pradesh - 462003",
+              "latin": "7 Shastri Nagar, Bhopal, Madhya Pradesh - 462003",
+              "postal_code": "462003",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 3358",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-tax-id-card.pdf",
+          "document_type": "tax_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "A. P. Sharma",
+              "latin": "A. P. Sharma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "O. P. Sharma",
+              "latin": "O. P. Sharma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1985-11-23",
+              "raw_text": "23/11/1985",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "CLMPS5530Q",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Revenue Department",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "03-voter-id-card.pdf",
+          "document_type": "voter_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Shri Sharma Ajay Prakash",
+              "latin": "Shri Sharma Ajay Prakash",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Om Prakash Sharma",
+              "latin": "Om Prakash Sharma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1985-11-23",
+              "raw_text": "23 November 1985",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "male",
+              "raw_text": "Male",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "7 Shastri Nagar, Bhopal, Madhya Pradesh - 462003",
+              "latin": "7 Shastri Nagar, Bhopal, Madhya Pradesh - 462003",
+              "postal_code": "462003",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "SVX4410927",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Election Office",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "field": "full_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-tax-id-card.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "initials",
+          "severity": "info"
+        },
+        {
+          "field": "parent_or_spouse_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-tax-id-card.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "initials",
+          "severity": "info"
+        },
+        {
+          "field": "full_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "03-voter-id-card.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "honorific_or_word_order",
+          "severity": "info"
+        },
+        {
+          "field": "full_name",
+          "documents": [
+            "02-tax-id-card.pdf",
+            "03-voter-id-card.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "initials",
+          "severity": "info"
+        },
+        {
+          "field": "parent_or_spouse_name",
+          "documents": [
+            "02-tax-id-card.pdf",
+            "03-voter-id-card.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "initials",
+          "severity": "info"
+        }
+      ]
+    },
+    {
+      "id": "B04-name-abbreviation",
+      "title": "Customary abbreviation of a name",
+      "kind": "harmless",
+      "case_type": "identity_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Mohammad Asif Khan",
+              "latin": "Mohammad Asif Khan",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Mohammad Yusuf Khan",
+              "latin": "Mohammad Yusuf Khan",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1993-01-30",
+              "raw_text": "30/01/1993",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "male",
+              "raw_text": "Male",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "112 Idgah Hills, Bhopal, Madhya Pradesh - 462001",
+              "latin": "112 Idgah Hills, Bhopal, Madhya Pradesh - 462001",
+              "postal_code": "462001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 4471",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-tax-id-card.pdf",
+          "document_type": "tax_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Mohd. Asif Khan",
+              "latin": "Mohd. Asif Khan",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Mohd. Yusuf Khan",
+              "latin": "Mohd. Yusuf Khan",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1993-01-30",
+              "raw_text": "30/01/1993",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "DRKPK6642M",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Revenue Department",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "03-income-certificate.pdf",
+          "document_type": "income_certificate",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Md Asif Khan",
+              "latin": "Md Asif Khan",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Mohammad Yusuf Khan",
+              "latin": "Mohammad Yusuf Khan",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": "112 Idgah Hills, Bhopal, Madhya Pradesh - 462001",
+              "latin": "112 Idgah Hills, Bhopal, Madhya Pradesh - 462001",
+              "postal_code": "462001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "IC/2026/006642",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": 96000.0,
+              "raw_text": "Rs. 96,000",
+              "currency": "INR",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issuing_authority": {
+              "value": "Office of the Sample Tehsildar",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2026-03-18",
+              "raw_text": "18-03-2026",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "field": "full_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-tax-id-card.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "abbreviation",
+          "severity": "info"
+        },
+        {
+          "field": "parent_or_spouse_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-tax-id-card.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "abbreviation",
+          "severity": "info"
+        },
+        {
+          "field": "full_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "03-income-certificate.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "abbreviation",
+          "severity": "info"
+        },
+        {
+          "field": "full_name",
+          "documents": [
+            "02-tax-id-card.pdf",
+            "03-income-certificate.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "abbreviation",
+          "severity": "info"
+        },
+        {
+          "field": "parent_or_spouse_name",
+          "documents": [
+            "02-tax-id-card.pdf",
+            "03-income-certificate.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "abbreviation",
+          "severity": "info"
+        }
+      ]
+    },
+    {
+      "id": "B05-hindi-transliteration",
+      "title": "Hindi document against English documents",
+      "kind": "harmless",
+      "case_type": "identity_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.png",
+          "document_type": "national_id_card",
+          "language": "hi",
+          "identity_fields": {
+            "full_name": {
+              "value": "रमेश कुमार शर्मा",
+              "latin": "Ramesh Kumar Sharma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "कृष्ण प्रसाद शर्मा",
+              "latin": "Krishna Prasad Sharma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1979-09-14",
+              "raw_text": "14/09/1979",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "male",
+              "raw_text": "पुरुष",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "18 गांधी चौक, देवास, मध्य प्रदेश - 455001",
+              "latin": "18 Gandhi Chowk, Dewas, Madhya Pradesh - 455001",
+              "postal_code": "455001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 5512",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "नमूना पहचान प्राधिकरण",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-tax-id-card.pdf",
+          "document_type": "tax_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Ramesh Kumar Sharma",
+              "latin": "Ramesh Kumar Sharma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Krishna Prasad Sharma",
+              "latin": "Krishna Prasad Sharma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1979-09-14",
+              "raw_text": "14 September 1979",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "EPLPS7753R",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Revenue Department",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "03-income-certificate.pdf",
+          "document_type": "income_certificate",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Ramesh Kumar Sharma",
+              "latin": "Ramesh Kumar Sharma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Krishna Prasad Sharma",
+              "latin": "Krishna Prasad Sharma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": "18 Gandhi Chowk, Dewas, Madhya Pradesh - 455001",
+              "latin": "18 Gandhi Chowk, Dewas, Madhya Pradesh - 455001",
+              "postal_code": "455001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "IC/2026/007753",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": 180000.0,
+              "raw_text": "Rs. 1,80,000",
+              "currency": "INR",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issuing_authority": {
+              "value": "Office of the Sample Tehsildar",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2026-02-21",
+              "raw_text": "21-02-2026",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "field": "full_name",
+          "documents": [
+            "01-national-id-card.png",
+            "02-tax-id-card.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "transliteration",
+          "severity": "info"
+        },
+        {
+          "field": "full_name",
+          "documents": [
+            "01-national-id-card.png",
+            "03-income-certificate.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "transliteration",
+          "severity": "info"
+        },
+        {
+          "field": "parent_or_spouse_name",
+          "documents": [
+            "01-national-id-card.png",
+            "02-tax-id-card.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "transliteration",
+          "severity": "info"
+        },
+        {
+          "field": "parent_or_spouse_name",
+          "documents": [
+            "01-national-id-card.png",
+            "03-income-certificate.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "transliteration",
+          "severity": "info"
+        },
+        {
+          "field": "address",
+          "documents": [
+            "01-national-id-card.png",
+            "03-income-certificate.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "transliteration",
+          "severity": "info"
+        }
+      ]
+    },
+    {
+      "id": "B06-dob-minor-typo",
+      "title": "Date of birth differs by one day",
+      "kind": "conflict",
+      "case_type": "identity_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Pooja Nair",
+              "latin": "Pooja Nair",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Gopalan Nair",
+              "latin": "Gopalan Nair",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1995-08-15",
+              "raw_text": "15/08/1995",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "female",
+              "raw_text": "Female",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "3 Lake View Colony, Jabalpur, Madhya Pradesh - 482001",
+              "latin": "3 Lake View Colony, Jabalpur, Madhya Pradesh - 482001",
+              "postal_code": "482001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 6634",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-tax-id-card.pdf",
+          "document_type": "tax_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Pooja Nair",
+              "latin": "Pooja Nair",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Gopalan Nair",
+              "latin": "Gopalan Nair",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1995-08-16",
+              "raw_text": "16/08/1995",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "FQMPN8864S",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Revenue Department",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "field": "date_of_birth",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-tax-id-card.pdf"
+          ],
+          "classification": "conflict",
+          "reason": "date_minor_difference",
+          "severity": "medium"
+        }
+      ]
+    },
+    {
+      "id": "B07-dob-year-conflict",
+      "title": "Birth year differs by fifteen years",
+      "kind": "conflict",
+      "case_type": "identity_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Vikram Singh Rathore",
+              "latin": "Vikram Singh Rathore",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Bhanu Singh Rathore",
+              "latin": "Bhanu Singh Rathore",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1982-03-12",
+              "raw_text": "12/03/1982",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "male",
+              "raw_text": "Male",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "61 Fort Road, Gwalior, Madhya Pradesh - 474001",
+              "latin": "61 Fort Road, Gwalior, Madhya Pradesh - 474001",
+              "postal_code": "474001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 7745",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-income-certificate.pdf",
+          "document_type": "income_certificate",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Vikram Singh Rathore",
+              "latin": "Vikram Singh Rathore",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Bhanu Singh Rathore",
+              "latin": "Bhanu Singh Rathore",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": "61 Fort Road, Gwalior, Madhya Pradesh - 474001",
+              "latin": "61 Fort Road, Gwalior, Madhya Pradesh - 474001",
+              "postal_code": "474001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "IC/2026/009975",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": 84000.0,
+              "raw_text": "Rs. 84,000",
+              "currency": "INR",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issuing_authority": {
+              "value": "Office of the Sample Tehsildar",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2026-01-28",
+              "raw_text": "28-01-2026",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        },
+        {
+          "file": "03-voter-id-card.pdf",
+          "document_type": "voter_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Vikram Singh Rathore",
+              "latin": "Vikram Singh Rathore",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Bhanu Singh Rathore",
+              "latin": "Bhanu Singh Rathore",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1997-03-12",
+              "raw_text": "12/03/1997",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "male",
+              "raw_text": "Male",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "61 Fort Road, Gwalior, Madhya Pradesh - 474001",
+              "latin": "61 Fort Road, Gwalior, Madhya Pradesh - 474001",
+              "postal_code": "474001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "SVX7719045",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Election Office",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "field": "date_of_birth",
+          "documents": [
+            "01-national-id-card.pdf",
+            "03-voter-id-card.pdf"
+          ],
+          "classification": "conflict",
+          "reason": "date_year_difference",
+          "severity": "high"
+        }
+      ]
+    },
+    {
+      "id": "B08-different-person",
+      "title": "A document that belongs to someone else",
+      "kind": "conflict",
+      "case_type": "identity_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Rahul Verma",
+              "latin": "Rahul Verma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Dinesh Verma",
+              "latin": "Dinesh Verma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1991-06-02",
+              "raw_text": "02/06/1991",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "male",
+              "raw_text": "Male",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "9 Station Road, Sagar, Madhya Pradesh - 470002",
+              "latin": "9 Station Road, Sagar, Madhya Pradesh - 470002",
+              "postal_code": "470002",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 8856",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-tax-id-card.pdf",
+          "document_type": "tax_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Sanjay Singh",
+              "latin": "Sanjay Singh",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Harpal Singh",
+              "latin": "Harpal Singh",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1991-06-02",
+              "raw_text": "02/06/1991",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "GRNPS9086T",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Revenue Department",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "field": "full_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-tax-id-card.pdf"
+          ],
+          "classification": "conflict",
+          "reason": "different_name",
+          "severity": "critical"
+        },
+        {
+          "field": "parent_or_spouse_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-tax-id-card.pdf"
+          ],
+          "classification": "conflict",
+          "reason": "different_name",
+          "severity": "critical"
+        }
+      ]
+    },
+    {
+      "id": "B09-similar-but-different-name",
+      "title": "Similar spelling, different given name",
+      "kind": "conflict",
+      "case_type": "identity_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Rahul Verma",
+              "latin": "Rahul Verma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Dinesh Verma",
+              "latin": "Dinesh Verma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1991-06-02",
+              "raw_text": "02/06/1991",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "male",
+              "raw_text": "Male",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "9 Station Road, Sagar, Madhya Pradesh - 470002",
+              "latin": "9 Station Road, Sagar, Madhya Pradesh - 470002",
+              "postal_code": "470002",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 8856",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-tax-id-card.pdf",
+          "document_type": "tax_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Rohit Verma",
+              "latin": "Rohit Verma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Dinesh Verma",
+              "latin": "Dinesh Verma",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1991-06-02",
+              "raw_text": "02/06/1991",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "HSNPV1197U",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Revenue Department",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "field": "full_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-tax-id-card.pdf"
+          ],
+          "classification": "conflict",
+          "reason": "different_name",
+          "severity": "critical",
+          "note": "High string similarity; must still be a conflict."
+        }
+      ]
+    },
+    {
+      "id": "B10-income-conflict",
+      "title": "Annual income differs eightfold",
+      "kind": "conflict",
+      "case_type": "identity_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Meena Kumari Yadav",
+              "latin": "Meena Kumari Yadav",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Shivnath Yadav",
+              "latin": "Shivnath Yadav",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1987-12-09",
+              "raw_text": "09/12/1987",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "female",
+              "raw_text": "Female",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "27 Azad Ward, Rewa, Madhya Pradesh - 486001",
+              "latin": "27 Azad Ward, Rewa, Madhya Pradesh - 486001",
+              "postal_code": "486001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 9967",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-income-certificate.pdf",
+          "document_type": "income_certificate",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Meena Kumari Yadav",
+              "latin": "Meena Kumari Yadav",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Shivnath Yadav",
+              "latin": "Shivnath Yadav",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": "27 Azad Ward, Rewa, Madhya Pradesh - 486001",
+              "latin": "27 Azad Ward, Rewa, Madhya Pradesh - 486001",
+              "postal_code": "486001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "IC/2026/011208",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": 60000.0,
+              "raw_text": "Rs. 60,000",
+              "currency": "INR",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issuing_authority": {
+              "value": "Office of the Sample Tehsildar",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2026-02-11",
+              "raw_text": "11-02-2026",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        },
+        {
+          "file": "03-income-certificate.pdf",
+          "document_type": "income_certificate",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Meena Kumari Yadav",
+              "latin": "Meena Kumari Yadav",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Shivnath Yadav",
+              "latin": "Shivnath Yadav",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": "27 Azad Ward, Rewa, Madhya Pradesh - 486001",
+              "latin": "27 Azad Ward, Rewa, Madhya Pradesh - 486001",
+              "postal_code": "486001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "IC/2025/030417",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": 480000.0,
+              "raw_text": "Rs. 4,80,000",
+              "currency": "INR",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issuing_authority": {
+              "value": "Office of the Sample Tehsildar",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2025-08-04",
+              "raw_text": "04-08-2025",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "field": "annual_income",
+          "documents": [
+            "02-income-certificate.pdf",
+            "03-income-certificate.pdf"
+          ],
+          "classification": "conflict",
+          "reason": "income_difference",
+          "severity": "critical"
+        }
+      ]
+    },
+    {
+      "id": "B11-gender-and-address",
+      "title": "Gender and postal code differ",
+      "kind": "conflict",
+      "case_type": "identity_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Kiran Patel",
+              "latin": "Kiran Patel",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Bharat Patel",
+              "latin": "Bharat Patel",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1994-04-20",
+              "raw_text": "20/04/1994",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "female",
+              "raw_text": "Female",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "5 Narmada Colony, Khargone, Madhya Pradesh - 451001",
+              "latin": "5 Narmada Colony, Khargone, Madhya Pradesh - 451001",
+              "postal_code": "451001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 1078",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-voter-id-card.pdf",
+          "document_type": "voter_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Kiran Patel",
+              "latin": "Kiran Patel",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Bharat Patel",
+              "latin": "Bharat Patel",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1994-04-20",
+              "raw_text": "20/04/1994",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "male",
+              "raw_text": "Male",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "5 Narmada Colony, Khandwa, Madhya Pradesh - 450001",
+              "latin": "5 Narmada Colony, Khandwa, Madhya Pradesh - 450001",
+              "postal_code": "450001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "SVX1120876",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Election Office",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "field": "gender",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-voter-id-card.pdf"
+          ],
+          "classification": "conflict",
+          "reason": "gender_difference",
+          "severity": "high"
+        },
+        {
+          "field": "address",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-voter-id-card.pdf"
+          ],
+          "classification": "conflict",
+          "reason": "address_locality_difference",
+          "severity": "medium"
+        }
+      ]
+    },
+    {
+      "id": "B12-image-formats",
+      "title": "Scanned images instead of PDFs",
+      "kind": "clean",
+      "case_type": "identity_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.jpg",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Anjali Mehta",
+              "latin": "Anjali Mehta",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Prakash Mehta",
+              "latin": "Prakash Mehta",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1996-10-01",
+              "raw_text": "01/10/1996",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "female",
+              "raw_text": "Female",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "40 Rajwada Lane, Indore, Madhya Pradesh - 452002",
+              "latin": "40 Rajwada Lane, Indore, Madhya Pradesh - 452002",
+              "postal_code": "452002",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 2189",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-tax-id-card.png",
+          "document_type": "tax_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Anjali Mehta",
+              "latin": "Anjali Mehta",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Prakash Mehta",
+              "latin": "Prakash Mehta",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1996-10-01",
+              "raw_text": "01-Oct-1996",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "JTPPM2208V",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Revenue Department",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "03-address-proof.tiff",
+          "document_type": "address_proof",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Anjali Mehta",
+              "latin": "Anjali Mehta",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": null,
+              "latin": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "date_of_birth": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": "40 Rajwada Lane, Indore, Madhya Pradesh - 452002",
+              "latin": "40 Rajwada Lane, Indore, Madhya Pradesh - 452002",
+              "postal_code": "452002",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "EB-3310-2189",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample City Power Supply Co.",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2026-03-02",
+              "raw_text": "02-03-2026",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        }
+      ],
+      "expected_findings": []
+    },
+    {
+      "id": "H01-hiring-candidate",
+      "title": "Candidate documents with one real conflict",
+      "kind": "conflict",
+      "case_type": "hiring_verification",
+      "family": null,
+      "relation": null,
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Nikhil Joshi",
+              "latin": "Nikhil Joshi",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Madhav Joshi",
+              "latin": "Madhav Joshi",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1998-05-17",
+              "raw_text": "17/05/1998",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "male",
+              "raw_text": "Male",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "88 Vijay Nagar, Indore, Madhya Pradesh - 452010",
+              "latin": "88 Vijay Nagar, Indore, Madhya Pradesh - 452010",
+              "postal_code": "452010",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 3290",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-marksheet.pdf",
+          "document_type": "marksheet",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Nikhil M. Joshi",
+              "latin": "Nikhil M. Joshi",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Madhav Joshi",
+              "latin": "Madhav Joshi",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1998-05-17",
+              "raw_text": "17 May 1998",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "SB/2014/771203",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Board of Secondary Education",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2014-05-30",
+              "raw_text": "30-05-2014",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        },
+        {
+          "file": "03-degree-certificate.pdf",
+          "document_type": "degree_certificate",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Nikhil Madhav Joshi",
+              "latin": "Nikhil Madhav Joshi",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Madhav Joshi",
+              "latin": "Madhav Joshi",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1999-05-17",
+              "raw_text": "17 May 1999",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "SSU/BE/2020/04417",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample State University",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2020-07-15",
+              "raw_text": "15-07-2020",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        },
+        {
+          "file": "04-experience-letter.pdf",
+          "document_type": "experience_letter",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Nikhil Joshi",
+              "latin": "Nikhil Joshi",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": null,
+              "latin": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "date_of_birth": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "SS/HR/2024/118",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Software Pvt. Ltd.",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2024-03-31",
+              "raw_text": "31-03-2024",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "field": "full_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-marksheet.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "extra_middle_name",
+          "severity": "info"
+        },
+        {
+          "field": "full_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "03-degree-certificate.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "extra_middle_name",
+          "severity": "info"
+        },
+        {
+          "field": "full_name",
+          "documents": [
+            "02-marksheet.pdf",
+            "03-degree-certificate.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "initials",
+          "severity": "info"
+        },
+        {
+          "field": "full_name",
+          "documents": [
+            "02-marksheet.pdf",
+            "04-experience-letter.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "extra_middle_name",
+          "severity": "info"
+        },
+        {
+          "field": "full_name",
+          "documents": [
+            "03-degree-certificate.pdf",
+            "04-experience-letter.pdf"
+          ],
+          "classification": "harmless_variant",
+          "reason": "extra_middle_name",
+          "severity": "info"
+        },
+        {
+          "field": "date_of_birth",
+          "documents": [
+            "01-national-id-card.pdf",
+            "03-degree-certificate.pdf"
+          ],
+          "classification": "conflict",
+          "reason": "date_year_difference",
+          "severity": "high"
+        },
+        {
+          "field": "date_of_birth",
+          "documents": [
+            "02-marksheet.pdf",
+            "03-degree-certificate.pdf"
+          ],
+          "classification": "conflict",
+          "reason": "date_year_difference",
+          "severity": "high"
+        }
+      ]
+    },
+    {
+      "id": "F01-head",
+      "title": "Family head",
+      "kind": "clean",
+      "case_type": "identity_verification",
+      "family": "F01",
+      "relation": "head",
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Mahesh Chand Agrawal",
+              "latin": "Mahesh Chand Agrawal",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Ratan Lal Agrawal",
+              "latin": "Ratan Lal Agrawal",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1975-02-08",
+              "raw_text": "08/02/1975",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "male",
+              "raw_text": "Male",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "12 Sarafa Bazar, Ratlam, Madhya Pradesh - 457001",
+              "latin": "12 Sarafa Bazar, Ratlam, Madhya Pradesh - 457001",
+              "postal_code": "457001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 4301",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-income-certificate.pdf",
+          "document_type": "income_certificate",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Mahesh Chand Agrawal",
+              "latin": "Mahesh Chand Agrawal",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Ratan Lal Agrawal",
+              "latin": "Ratan Lal Agrawal",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": "12 Sarafa Bazar, Ratlam, Madhya Pradesh - 457001",
+              "latin": "12 Sarafa Bazar, Ratlam, Madhya Pradesh - 457001",
+              "postal_code": "457001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "IC/2026/014301",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": 240000.0,
+              "raw_text": "Rs. 2,40,000",
+              "currency": "INR",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issuing_authority": {
+              "value": "Office of the Sample Tehsildar",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2026-01-05",
+              "raw_text": "05-01-2026",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        }
+      ],
+      "expected_findings": []
+    },
+    {
+      "id": "F01-spouse",
+      "title": "Spouse of the family head",
+      "kind": "clean",
+      "case_type": "identity_verification",
+      "family": "F01",
+      "relation": "spouse",
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Sarla Agrawal",
+              "latin": "Sarla Agrawal",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Mahesh Chand Agrawal",
+              "latin": "Mahesh Chand Agrawal",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1978-06-19",
+              "raw_text": "19/06/1978",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "female",
+              "raw_text": "Female",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "12 Sarafa Bazar, Ratlam, Madhya Pradesh - 457001",
+              "latin": "12 Sarafa Bazar, Ratlam, Madhya Pradesh - 457001",
+              "postal_code": "457001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 4302",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-voter-id-card.pdf",
+          "document_type": "voter_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Sarla Agrawal",
+              "latin": "Sarla Agrawal",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Mahesh Chand Agrawal",
+              "latin": "Mahesh Chand Agrawal",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "1978-06-19",
+              "raw_text": "19/06/1978",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "female",
+              "raw_text": "Female",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "12 Sarafa Bazar, Ratlam, Madhya Pradesh - 457001",
+              "latin": "12 Sarafa Bazar, Ratlam, Madhya Pradesh - 457001",
+              "postal_code": "457001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "SVX4302118",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Election Office",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        }
+      ],
+      "expected_findings": []
+    },
+    {
+      "id": "F01-child",
+      "title": "Child whose document names a different father",
+      "kind": "conflict",
+      "case_type": "identity_verification",
+      "family": "F01",
+      "relation": "child",
+      "documents": [
+        {
+          "file": "01-national-id-card.pdf",
+          "document_type": "national_id_card",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Tanvi Agrawal",
+              "latin": "Tanvi Agrawal",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Mahesh Chand Agrawal",
+              "latin": "Mahesh Chand Agrawal",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "2004-09-27",
+              "raw_text": "27/09/2004",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": "female",
+              "raw_text": "Female",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "address": {
+              "value": "12 Sarafa Bazar, Ratlam, Madhya Pradesh - 457001",
+              "latin": "12 Sarafa Bazar, Ratlam, Madhya Pradesh - 457001",
+              "postal_code": "457001",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "id_number": {
+              "value": "XXXX XXXX 4303",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Identity Authority",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            }
+          }
+        },
+        {
+          "file": "02-marksheet.pdf",
+          "document_type": "marksheet",
+          "language": "en",
+          "identity_fields": {
+            "full_name": {
+              "value": "Tanvi Agrawal",
+              "latin": "Tanvi Agrawal",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "parent_or_spouse_name": {
+              "value": "Mukesh Chand Agrawal",
+              "latin": "Mukesh Chand Agrawal",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "date_of_birth": {
+              "value": "2004-09-27",
+              "raw_text": "27 September 2004",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "gender": {
+              "value": null,
+              "raw_text": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "address": {
+              "value": null,
+              "latin": null,
+              "postal_code": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "id_number": {
+              "value": "SB/2020/330417",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "annual_income": {
+              "value": null,
+              "raw_text": null,
+              "currency": null,
+              "confidence": 0.0,
+              "uncertain": true
+            },
+            "issuing_authority": {
+              "value": "Sample Board of Secondary Education",
+              "confidence": 0.95,
+              "uncertain": false
+            },
+            "issue_date": {
+              "value": "2020-06-12",
+              "raw_text": "12-06-2020",
+              "confidence": 0.95,
+              "uncertain": false
+            }
+          }
+        }
+      ],
+      "expected_findings": [
+        {
+          "field": "parent_or_spouse_name",
+          "documents": [
+            "01-national-id-card.pdf",
+            "02-marksheet.pdf"
+          ],
+          "classification": "conflict",
+          "reason": "different_name",
+          "severity": "critical",
+          "note": "Mahesh / Mukesh: similar spelling, different given name."
+        }
+      ]
+    }
+  ],
+  "families": [
+    {
+      "id": "F01",
+      "head": "F01-head",
+      "members": [
+        {
+          "bundle": "F01-head",
+          "relation": "head"
+        },
+        {
+          "bundle": "F01-spouse",
+          "relation": "spouse"
+        },
+        {
+          "bundle": "F01-child",
+          "relation": "child"
+        }
+      ],
+      "expected": [
+        {
+          "check": "shared_address",
+          "result": "match"
+        },
+        {
+          "check": "birth_order",
+          "result": "match"
+        },
+        {
+          "check": "parent_name",
+          "member": "F01-child",
+          "result": "conflict",
+          "note": "The child's marksheet names Mukesh Chand Agrawal; the head is Mahesh Chand Agrawal."
+        }
+      ]
+    }
+  ],
+  "skipped": []
+}

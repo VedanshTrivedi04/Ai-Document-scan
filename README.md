@@ -34,6 +34,19 @@ processing status, overlays, risk reasons, audit timeline), new-case/upload,
 company settings and platform-admin screens. Multi-tenant: several client
 companies share one deployment, each seeing only its own data.
 
+## Document Contradiction Detector
+
+This repository also contains a contradiction detector for a person's document bundle (identity card,
+address proof, income certificate): harmless differences between the documents are ignored, real
+conflicts are flagged with a severity and their place on the page, and a reviewer accepts or dismisses
+each one. See [`docs/CONTRADICTION_DETECTOR_REPORT.md`](docs/CONTRADICTION_DETECTOR_REPORT.md) and
+[`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md). To see it without any setup beyond Python:
+
+```bash
+cd backend
+python -m scripts.demo_identity_bundles
+```
+
 ## User Manuals
 
 - 🏢 **[Company User Manual](docs/COMPANY_USER_MANUAL.md)** — Step-by-step operational guide for client organizations covering all 3 company roles (**User/Submitter**, **Reviewer L1/Analyst**, **Reviewer L2/Supervisor**), case submission, bulk uploads, review workflows, automated checks, and company settings.

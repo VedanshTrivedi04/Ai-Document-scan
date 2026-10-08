@@ -6,7 +6,10 @@ Document Intelligence call or Azure OpenAI quota.
 
 Only PDF documents are accepted (2026-10-03): every forensic check in the
 pipeline is PDF-only, so an image upload would only ever get OCR and no
-tamper analysis. Checks, in order (the first failure wins):
+tamper analysis. The exception is an identity bundle, which is compared
+field by field and never forensically analysed: there `allow_images` also
+accepts JPEG, PNG and TIFF (decoded with Pillow; same size, extension and
+corruption checks). Checks, in order (the first failure wins):
 
 1. Size: empty (0 bytes) → `file_empty`; over the limit → `file_too_large`
    (states both the limit and the received size).
@@ -31,6 +34,7 @@ tamper analysis. Checks, in order (the first failure wins):
 """
 from __future__ import annotations
 
+import io
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any
@@ -174,11 +178,63 @@ def _parse_pdf(content: bytes) -> int:
         doc.close()
 
 
-def validate_upload(content: bytes, filename: str | None, *, max_bytes: int) -> ValidatedUpload:
+# Images accepted for identity bundles only (app/services/identity_documents.py):
+# header bytes -> (content type, extensions that agree with it, Pillow format).
+_IMAGE_TYPES: tuple[tuple[tuple[bytes, ...], str, frozenset[str], str], ...] = (
+    ((b"\xff\xd8\xff",), "image/jpeg", frozenset({".jpg", ".jpeg", ".jpe", ".jfif"}), "JPEG"),
+    ((b"\x89PNG\r\n\x1a\n",), "image/png", frozenset({".png"}), "PNG"),
+    ((b"II*\x00", b"MM\x00*"), "image/tiff", frozenset({".tif", ".tiff"}), "TIFF"),
+)
+IMAGE_CONTENT_TYPES = frozenset(content_type for _, content_type, _, _ in _IMAGE_TYPES)
+
+
+def _validate_image(content: bytes, filename: str | None) -> ValidatedUpload | None:
+    """The upload described, if its header bytes say it is an accepted image
+    type; None if they do not. Raises UploadRejected for a mismatched
+    extension or an image that cannot be decoded."""
+    from PIL import Image
+
+    for signatures, content_type, extensions, pil_format in _IMAGE_TYPES:
+        if not content.startswith(signatures):
+            continue
+        extension = PurePosixPath(filename or "").suffix.lower()
+        names_another_type = extension == ".pdf" or extension in _OTHER_TYPE_EXTENSIONS
+        if names_another_type and extension not in extensions:
+            raise UploadRejected(
+                "file_type_mismatch",
+                f"The file is named '{extension}' but its content is a {pil_format} image. "
+                "Please upload it with the matching extension.",
+                415,
+                detected_type=content_type,
+                extension=extension,
+            )
+        try:
+            with Image.open(io.BytesIO(content), formats=[pil_format]) as image:
+                pages = getattr(image, "n_frames", 1)
+                image.load()  # decodes the pixels: a truncated image fails here
+        except Exception as exc:  # noqa: BLE001 - UnidentifiedImageError, OSError, ...
+            raise _corrupted() from exc
+        return ValidatedUpload(content_type, page_count=pages)
+    return None
+
+
+def validate_upload(
+    content: bytes, filename: str | None, *, max_bytes: int, allow_images: bool = False
+) -> ValidatedUpload:
     """Raise UploadRejected for the first failed check, else describe the
-    file. `content` is the full file (the caller has already bounded it)."""
+    file. `content` is the full file (the caller has already bounded it).
+    `allow_images` also accepts JPEG, PNG and TIFF images."""
     check_size(len(content), max_bytes)
     if not is_pdf(content):
+        if allow_images:
+            image = _validate_image(content, filename)
+            if image is not None:
+                return image
+            raise UploadRejected(
+                "unsupported_file_type",
+                "This file type is not supported. Please upload a PDF, or a JPG, PNG or TIFF image.",
+                415,
+            )
         found = describe_non_pdf(content)
         prefix = f"This file is {found}. " if found else "This file type is not supported. "
         raise UploadRejected(

@@ -37,6 +37,7 @@ from app.models.user import User
 from app.services.audit_service import record_event
 from app.schemas.settings import RiskRuleCreate
 from app.services import risk_rule_catalog as catalog
+from app.services import subdomains
 from app.services.risk_rule_seed import ensure_rule_templates, seed_risk_rules
 from app.services.usage_service import reconcile_usage, usage_by_company
 
@@ -60,6 +61,7 @@ _RESPONSES = {
 class CompanyResponse(BaseModel):
     id: uuid.UUID
     name: str
+    subdomain: str | None = Field(description="The label the company's site is reached at, if set.")
     is_active: bool
     created_at: datetime
     user_count: int
@@ -73,8 +75,23 @@ _FILE_LIMIT = Field(default=None, ge=1, description="Max document size in MB (pe
 _ZIP_LIMIT = Field(default=None, ge=1, description="Max bulk-upload zip size in MB (per company).")
 
 
+def _valid_subdomain(value: str | None) -> str | None:
+    if value is None or not value.strip():
+        return None
+    try:
+        return subdomains.normalize(value)
+    except subdomains.InvalidSubdomain as exc:
+        raise ValueError(str(exc)) from None
+
+
 class CompanyCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=255)
+    subdomain: str | None = Field(
+        default=None,
+        description="3-63 lowercase letters, digits or hyphens. Omitted: made from the name.",
+    )
+
+    _subdomain = field_validator("subdomain")(_valid_subdomain)
     # Omitted: the platform defaults (DEFAULT_MAX_FILE_SIZE_MB / _ZIP_SIZE_MB),
     # stored on the row now — never re-derived later.
     max_file_size_mb: int | None = _FILE_LIMIT
@@ -91,15 +108,39 @@ class CompanyCreate(BaseModel):
 
 class CompanyUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=255)
+    subdomain: str | None = Field(
+        default=None, description="New subdomain. Send an empty string or null to remove it."
+    )
+
+    _subdomain = field_validator("subdomain")(_valid_subdomain)
     is_active: bool | None = None
     max_file_size_mb: int | None = _FILE_LIMIT
     max_zip_size_mb: int | None = _ZIP_LIMIT
 
 
+def _subdomain_taken(db: Session, subdomain: str, except_company: uuid.UUID | None = None) -> bool:
+    stmt = select(Company.id).where(Company.subdomain == subdomain)
+    if except_company is not None:
+        stmt = stmt.where(Company.id != except_company)
+    return db.execute(stmt).first() is not None
+
+
+def _free_subdomain(db: Session, name: str) -> str | None:
+    """A subdomain made from the company's name that nobody uses yet, or None."""
+    base = subdomains.suggest(name)
+    if base is None:
+        return None
+    for suffix in ("", *(f"-{n}" for n in range(2, 50))):
+        candidate = base[: subdomains.MAX_LENGTH - len(suffix)].rstrip("-") + suffix
+        if not _subdomain_taken(db, candidate):
+            return candidate
+    return None
+
+
 def _company_response(db: Session, company: Company) -> CompanyResponse:
     count = db.execute(select(func.count()).select_from(User).where(User.company_id == company.id)).scalar_one()
     return CompanyResponse(
-        id=company.id, name=company.name, is_active=company.is_active,
+        id=company.id, name=company.name, subdomain=company.subdomain, is_active=company.is_active,
         created_at=company.created_at, user_count=int(count),
         max_file_size_mb=company.max_file_size_mb, max_zip_size_mb=company.max_zip_size_mb,
     )
@@ -114,7 +155,7 @@ def list_companies(db: Session = Depends(get_system_db)) -> list[CompanyResponse
     )
     return [
         CompanyResponse(
-            id=c.id, name=c.name, is_active=c.is_active, created_at=c.created_at,
+            id=c.id, name=c.name, subdomain=c.subdomain, is_active=c.is_active, created_at=c.created_at,
             user_count=int(counts.get(c.id, 0)),
             max_file_size_mb=c.max_file_size_mb, max_zip_size_mb=c.max_zip_size_mb,
         )
@@ -142,8 +183,11 @@ def create_company(
 ) -> CompanyResponse:
     if db.execute(select(Company.id).where(func.lower(Company.name) == payload.name.lower())).first():
         raise HTTPException(status.HTTP_409_CONFLICT, "A company with this name already exists.")
+    if payload.subdomain and _subdomain_taken(db, payload.subdomain):
+        raise HTTPException(status.HTTP_409_CONFLICT, "This subdomain is already in use.")
     company = Company(
         name=payload.name,
+        subdomain=payload.subdomain or _free_subdomain(db, payload.name),
         is_active=True,
         max_file_size_mb=payload.max_file_size_mb or settings.default_max_file_size_mb,
         max_zip_size_mb=payload.max_zip_size_mb or settings.default_max_zip_size_mb,
@@ -160,7 +204,8 @@ def create_company(
         "company_created",
         actor_user_id=admin.id,
         event_data={
-            "company_id": str(company.id), "name": company.name, "seeded_risk_rules": rules,
+            "company_id": str(company.id), "name": company.name, "subdomain": company.subdomain,
+            "seeded_risk_rules": rules,
             "max_file_size_mb": company.max_file_size_mb, "max_zip_size_mb": company.max_zip_size_mb,
         },
     )
@@ -202,6 +247,11 @@ def update_company(
                 raise HTTPException(status.HTTP_409_CONFLICT, "A company with this name already exists.")
             changes["name"] = {"from": company.name, "to": name}
             company.name = name
+    if "subdomain" in payload.model_fields_set and payload.subdomain != company.subdomain:
+        if payload.subdomain and _subdomain_taken(db, payload.subdomain, except_company=company.id):
+            raise HTTPException(status.HTTP_409_CONFLICT, "This subdomain is already in use.")
+        changes["subdomain"] = {"from": company.subdomain, "to": payload.subdomain}
+        company.subdomain = payload.subdomain
     if payload.is_active is not None and payload.is_active != company.is_active:
         changes["is_active"] = {"from": company.is_active, "to": payload.is_active}
         company.is_active = payload.is_active

@@ -69,6 +69,7 @@ export default defineConfig({
       'busybody-entail-parkway.ngrok-free.dev',
       '.ngrok-free.dev',
       '.ngrok.app',
+      '.localhost',
     ],
     proxy: {
       // Backend runs on :8000 (see backend/README / SPECIFICATION.md). Proxying

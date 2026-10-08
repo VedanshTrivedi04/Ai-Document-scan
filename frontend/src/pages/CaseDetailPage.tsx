@@ -6,11 +6,16 @@ import {
   ClockIcon,
   DownloadIcon,
   FileTextIcon,
+  GlobeIcon,
+  ShieldCheckIcon,
+  UsersIcon,
 } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 
 import { getCase, getCaseAuditLog, getSignatureMatches } from "@/api/cases"
+import { getCatalog, getLanguages } from "@/api/i18n"
+import { getCaseProfile } from "@/api/profiles"
 import { useAuth } from "@/hooks/useAuth"
 import { Nav } from "@/design-system/Nav"
 import { InfoChip } from "@/design-system/InfoChip"
@@ -20,9 +25,21 @@ import { CaseDecisionPanel } from "@/components/case/CaseDecisionPanel"
 import { CaseReportExport } from "@/components/case/CaseReportExport"
 import { RiskBadge, TierBadge } from "@/components/case/CaseBadges"
 import { DocumentChecksPanel, getCheckOverlays } from "@/components/case/DocumentChecksPanel"
+import { IdentityFindingsPanel } from "@/components/case/IdentityFindingsPanel"
 import { PdfOverlayViewer } from "@/components/case/PdfOverlayViewer"
+import { PersonDetailsPanel } from "@/components/case/PersonDetailsPanel"
+import { VerifiedProfilePanel } from "@/components/case/VerifiedProfilePanel"
+import { FormsListSection } from "@/components/case/FormsListSection"
 import { APP_FULL_NAME, APP_NAME } from "@/lib/appInfo"
-import { DOCUMENT_TYPE_LABELS, type CaseDetailDocument, type SignatureMatch } from "@/types/case"
+import { cn } from "@/lib/utils"
+import {
+  DOCUMENT_TYPE_LABELS,
+  isIdentityCase,
+  type BoundingBox,
+  type CaseDetailDocument,
+  type IdentityExtractedFields,
+  type SignatureMatch,
+} from "@/types/case"
 import { hasRank, isPlatformAdmin } from "@/types/auth"
 
 // Card colours by risk tier: low = green, medium = amber, high = red, and a
@@ -53,6 +70,7 @@ const FLAG_TEXT_CLASSES: Record<string, string> = {
 }
 
 const SEVERITY_TONE: Record<string, "negative" | "warning" | "positive"> = {
+  critical: "negative",
   high: "negative",
   medium: "warning",
   low: "positive",
@@ -76,6 +94,22 @@ export function CaseDetailPage() {
   const { caseId } = useParams<{ caseId: string }>()
   const { token, user } = useAuth()
   const [selectedDocIndex, setSelectedDocIndex] = React.useState<number>(0)
+  const [detailsView, setDetailsView] = React.useState<"profile" | "document">("profile")
+  const [currentLang, setCurrentLang] = React.useState<string>(() => {
+    try {
+      return localStorage.getItem("agnitia_lang") || "en"
+    } catch {
+      return "en"
+    }
+  })
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("agnitia_lang", currentLang)
+    } catch {
+      // ignore
+    }
+  }, [currentLang])
 
   const isReady = Boolean(caseId && token)
   // Submitters never receive their own case's risk tier/score/reasons (the
@@ -86,13 +120,33 @@ export function CaseDetailPage() {
   const isReviewerRole = hasRank(user?.role, "reviewer_l1") || isSupportView
   const canExport = hasRank(user?.role, "reviewer_l1")
 
+  // Available languages from GET /i18n/languages (public)
+  const { data: languages = [] } = useQuery({
+    queryKey: ["i18nLanguages"],
+    queryFn: () => getLanguages(),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Offer only languages where available === true
+  const availableLanguages = React.useMemo(() => {
+    return languages.filter((l) => l.available)
+  }, [languages])
+
+  // Catalog of translated machine labels from GET /i18n/catalog?lang=<code>
+  const { data: catalog = null } = useQuery({
+    queryKey: ["i18nCatalog", currentLang, token],
+    queryFn: () => (token ? getCatalog(currentLang, token) : Promise.resolve(null)),
+    enabled: Boolean(token),
+    staleTime: 5 * 60 * 1000,
+  })
+
   const {
     data: caseDetail,
     isLoading: isCaseLoading,
     isError: isCaseError,
   } = useQuery({
-    queryKey: ["case", caseId, token],
-    queryFn: () => getCase(caseId!, token!),
+    queryKey: ["case", caseId, token, currentLang],
+    queryFn: () => getCase(caseId!, token!, currentLang),
     enabled: isReady,
     // Poll while the automated pipeline is still running so "Analyzing"
     // resolves into a tier (and Approve unlocks) without a manual refresh.
@@ -159,6 +213,26 @@ export function CaseDetailPage() {
   const viewerUrl =
     activeDoc && viewerFile?.docId === activeDoc.id ? viewerFile.url : activeDoc?.file_url
 
+  const [selectedBox, setSelectedBox] = React.useState<BoundingBox | null>(null)
+
+  // Reset selected box whenever active document changes
+  React.useEffect(() => {
+    setSelectedBox(null)
+  }, [selectedDocIndex])
+
+  const isIdentity = isIdentityCase(caseDetail?.case_type) || activeDoc?.extracted_fields?.schema === "identity"
+
+  const { data: caseProfile = null, isLoading: isProfileLoading } = useQuery({
+    queryKey: ["caseProfile", caseId, token],
+    queryFn: () => (caseId && token ? getCaseProfile(caseId, token) : Promise.resolve(null)),
+    enabled: Boolean(isReady && isIdentity),
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (!data) return false
+      return !data.checks_complete ? 5_000 : false
+    },
+  })
+
   // Filter signature matches to those comparing AGAINST the active document
   // (i.e. document_id = activeDoc.id — the target, not the reference source).
   const activeDocSignatureMatches: SignatureMatch[] = activeDoc
@@ -196,8 +270,13 @@ export function CaseDetailPage() {
     )
   }
 
+  const isRtl = (catalog?.direction || availableLanguages.find((l) => l.code === currentLang)?.direction) === "rtl"
+
   return (
-    <div className="min-h-screen flex flex-col font-sans bg-[#F1F5FA] text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-900">
+    <div
+      dir={isRtl ? "rtl" : "ltr"}
+      className="min-h-screen flex flex-col font-sans bg-[#F1F5FA] text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-900"
+    >
       <Nav active="cases" />
 
       <section className="px-3.5 sm:px-6 pt-4 sm:pt-5 pb-3 max-w-[1680px] w-full mx-auto">
@@ -212,7 +291,7 @@ export function CaseDetailPage() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <p className="text-[11px] font-bold tracking-widest text-blue-700 uppercase">
-              Case Investigation
+              {isIdentity ? "Identity Verification" : "Case Investigation"}
             </p>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-0.5">
               {isCaseLoading ? "Loading..." : caseDetail?.case_number ?? "—"}
@@ -222,15 +301,50 @@ export function CaseDetailPage() {
                 <span>{caseDetail.submitted_by?.full_name || caseDetail.submitted_by?.email}</span>
                 <span className="text-slate-300">·</span>
                 <span>{documents.length} document{documents.length === 1 ? "" : "s"} attached</span>
-                <span className="text-slate-300">·</span>
-                <RiskBadge tier={caseDetail.risk_tier} compact />
+                {!isIdentity && (
+                  <>
+                    <span className="text-slate-300">·</span>
+                    <RiskBadge tier={caseDetail.risk_tier} compact />
+                  </>
+                )}
+                {caseDetail.family_member && (
+                  <>
+                    <span className="text-slate-300">·</span>
+                    <Link
+                      to={`/families/${caseDetail.family_member.family_id}`}
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors"
+                      title="View Household"
+                    >
+                      <UsersIcon className="size-3 text-blue-600" />
+                      <span>{caseDetail.family_member.full_name} ({caseDetail.family_member.relation})</span>
+                    </Link>
+                  </>
+                )}
               </p>
             )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Language Selector */}
+            {availableLanguages.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-white border border-slate-200/90 rounded-lg px-2.5 py-1.5 text-xs shadow-2xs">
+                <GlobeIcon className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <select
+                  value={currentLang}
+                  onChange={(e) => setCurrentLang(e.target.value)}
+                  className="bg-transparent border-none text-xs font-semibold text-slate-700 focus:outline-hidden cursor-pointer"
+                  aria-label="Interface language"
+                >
+                  {availableLanguages.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.native_name} {lang.native_name !== lang.name ? `(${lang.name})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {canExport && caseId && token && <CaseReportExport caseId={caseId} token={token} />}
-            {caseDetail && <TierBadge tier={caseDetail.assigned_tier} />}
+            {caseDetail && !isIdentity && <TierBadge tier={caseDetail.assigned_tier} />}
           </div>
         </div>
       </section>
@@ -243,416 +357,643 @@ export function CaseDetailPage() {
           </div>
         )}
 
-        {/* Mobile / Tablet Evidence Switcher (< lg) */}
-        {documents.length > 1 && (
-          <div className="lg:hidden flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth pb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
-              Evidence:
-            </span>
-            {documents.map((doc, idx) => {
-              const isSelected = selectedDocIndex === idx
-              const failed = doc.checks?.some((c) => c.status === "failed")
-              return (
-                <button
-                  key={doc.id}
-                  type="button"
-                  onClick={() => setSelectedDocIndex(idx)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 whitespace-nowrap transition border ${
-                    isSelected
-                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  <span className={`size-1.5 rounded-full ${isSelected ? "bg-white" : failed ? "bg-rose-500" : "bg-emerald-500"}`} />
-                  <span className="max-w-[140px] truncate">{doc.original_filename}</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
+        {isIdentity ? (
+          /* ================= IDENTITY CASE 2-COLUMN LAYOUT ================= */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+            {/* LEFT COLUMN: ~60% (col-span-7) Document Tabs + Viewer */}
+            <div className="lg:col-span-7 flex flex-col gap-3 min-w-0">
+              {/* Document Tabs across the top with conflict badges */}
+              <div className="bg-white rounded-xl border border-slate-200/80 p-2.5 shadow-2xs">
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+                  {documents.map((doc, idx) => {
+                    const isSelected = selectedDocIndex === idx
+                    const label = doc.document_type
+                      ? catalog?.documents?.[doc.document_type] ?? DOCUMENT_TYPE_LABELS[doc.document_type] ?? doc.document_type
+                      : `Document ${idx + 1}`
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
-          {/* LEFT SIDEBAR: Documents & Case Flags */}
-          <aside aria-label="Documents in Case" className="lg:col-span-3 flex flex-col space-y-4">
-            {isCaseLoading && (
-              <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm text-xs text-slate-400">
-                Loading case...
-              </div>
-            )}
-            {caseDetail && isReviewerRole && (
-              <div className={`border rounded-xl p-4 shadow-sm ${FLAG_CARD_CLASSES[caseDetail.flag.flag]}`}>
-                <div className="flex items-start space-x-3">
-                  <div className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center mt-0.5 ${FLAG_ICON_CLASSES[caseDetail.flag.flag]}`}>
-                    {caseDetail.flag.flag === "low" ? (
-                      <CheckCircle2Icon className="w-4 h-4" />
-                    ) : caseDetail.flag.flag === "pending" ? (
-                      <ClockIcon className="w-4 h-4" />
-                    ) : (
-                      <AlertTriangleIcon className="w-4 h-4" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className={`text-xs font-bold leading-tight ${FLAG_TITLE_CLASSES[caseDetail.flag.flag]}`}>
-                      {caseDetail.flag.label}
-                      {caseDetail.flag.score !== null && (
-                        <span className="ml-1.5 font-mono font-semibold opacity-70">{caseDetail.flag.score}/100</span>
-                      )}
-                    </h3>
-                    <p className={`text-xs leading-relaxed mt-2 break-words [overflow-wrap:anywhere] ${FLAG_TEXT_CLASSES[caseDetail.flag.flag]}`}>
-                      {caseDetail.flag.description}
-                    </p>
-                  </div>
+                    // Count unresolved conflicts involving this document
+                    const conflictCount = (caseDetail?.cross_document_findings ?? []).filter(
+                      (f) => f.classification === "conflict" && f.document_ids?.includes(doc.id)
+                    ).length
+
+                    return (
+                      <button
+                        key={doc.id}
+                        type="button"
+                        onClick={() => setSelectedDocIndex(idx)}
+                        title={doc.original_filename}
+                        className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold shrink-0 transition-all ${
+                          isSelected
+                            ? "bg-primary text-primary-foreground shadow-xs"
+                            : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                      >
+                        <FileTextIcon className="size-3.5 shrink-0" />
+                        <span className="truncate max-w-[160px]">{label}</span>
+                        {conflictCount > 0 && (
+                          <span
+                            title={`${conflictCount} conflict${conflictCount === 1 ? "" : "s"} involving this document`}
+                            className={`inline-flex items-center justify-center size-4.5 rounded-full text-[10px] font-bold ${
+                              isSelected
+                                ? "bg-white text-destructive shadow-2xs"
+                                : "bg-red-600 text-white"
+                            }`}
+                          >
+                            {conflictCount}
+                          </span>
+                        )}
+                        {doc.processing_status === "processing" && (
+                          <span className="size-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
-            )}
 
-            <div className="hidden lg:flex bg-white rounded-xl border border-slate-200/80 p-4 shadow-sm flex-col flex-1">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Documents ({documents.length})
-                </span>
-              </div>
-              <div className="space-y-2.5">
-                {documents.length === 0 && !isCaseLoading && (
-                  <p className="text-xs text-slate-400 py-4 text-center">No documents uploaded yet.</p>
-                )}
-                {documents.map((doc, idx) => {
-                  const isSelected = selectedDocIndex === idx
-                  const totalChecks = doc.checks?.length ?? 0
-                  // Counted by RESULT, not by run status: a check that ran and
-                  // flagged is not "passed".
-                  const resultOf = (c: { status: string; result: Record<string, unknown> | null }) =>
-                    c.status === "completed" ? String(c.result?.result ?? "") : c.status
-                  const countOf = (r: string) => doc.checks?.filter((c) => resultOf(c) === r).length ?? 0
-                  const flaggedChecks = countOf("flag")
-                  const passedChecks = countOf("pass")
-                  const limitedChecks = countOf("limited")
-                  const failedChecks = countOf("failed")
-                  const docTypeLabel = doc.document_type
-                    ? DOCUMENT_TYPE_LABELS[doc.document_type] ?? doc.document_type
-                    : "Classification pending"
-                  const statusParts = [
-                    flaggedChecks > 0 && `${flaggedChecks} flagged`,
-                    limitedChecks > 0 && `${limitedChecks} limited`,
-                    failedChecks > 0 && `${failedChecks} failed to run`,
-                    passedChecks > 0 && `${passedChecks} passed`,
-                  ].filter(Boolean)
-                  const statusText =
-                    totalChecks === 0
-                      ? "No checks run yet"
-                      : flaggedChecks + limitedChecks + failedChecks === 0
-                      ? `All ${passedChecks} check${passedChecks === 1 ? "" : "s"} passed`
-                      : statusParts.join(" · ")
-
-                  return (
-                    <div
-                      key={doc.id}
-                      onClick={() => setSelectedDocIndex(idx)}
-                      className={`relative rounded-lg p-3 cursor-pointer shadow-sm transition-colors ${
-                        isSelected
-                          ? "bg-blue-50/70 border-2 border-blue-600"
-                          : "border border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start space-x-2.5 min-w-0">
-                          <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 ${
-                            isSelected ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"
-                          }`}>
-                            <FileTextIcon className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="text-xs font-bold text-slate-900 leading-tight truncate" title={doc.original_filename}>
-                              {doc.original_filename}
-                            </h4>
-                            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                              {docTypeLabel}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-2">
-                              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                totalChecks === 0
-                                  ? "bg-slate-300"
-                                  : flaggedChecks + failedChecks > 0
-                                  ? "bg-red-500"
-                                  : limitedChecks > 0
-                                  ? "bg-amber-500"
-                                  : "bg-emerald-500"
-                              }`}></span>
-                              <span className={`text-[10px] font-semibold ${flaggedChecks + failedChecks > 0 ? "text-red-600" : "text-slate-600"}`}>
-                                {statusText}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        {isSelected && (
-                          <span className="text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded flex-shrink-0">Active</span>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </aside>
-
-          {/* CENTER COLUMN: Document Detail + Checks */}
-          <section aria-label="Document Detail and Checks" className="lg:col-span-5 flex flex-col space-y-3">
-            {!activeDoc ? (
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center text-sm text-slate-400">
-                {isCaseLoading ? "Loading document..." : "No document selected."}
-              </div>
-            ) : (
-              <>
+              {/* Document Header & Viewer */}
+              {!activeDoc ? (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center text-sm text-slate-400">
+                  {isCaseLoading ? "Loading document..." : "No document selected."}
+                </div>
+              ) : (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                     <div>
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Evidence {String(selectedDocIndex + 1).padStart(2, "0")}
+                        Document {String(selectedDocIndex + 1).padStart(2, "0")} of {documents.length}
                       </span>
                       <h2 className="text-sm font-bold text-slate-800">
-                        {DOCUMENT_TYPE_LABELS[activeDoc.document_type ?? ""] ?? activeDoc.original_filename}
+                        {activeDoc.document_type
+                          ? catalog?.documents?.[activeDoc.document_type] ?? DOCUMENT_TYPE_LABELS[activeDoc.document_type] ?? activeDoc.document_type
+                          : activeDoc.original_filename}
                       </h2>
+                      <p className="text-[11px] text-slate-500 font-mono mt-0.5" title={activeDoc.original_filename}>
+                        {activeDoc.original_filename}
+                      </p>
                     </div>
-                    <a
-                      href={activeDoc.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-                      title="Download or open original file"
-                    >
-                      <DownloadIcon className="w-4 h-4" />
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
+                        activeDoc.processing_status === "complete"
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : activeDoc.processing_status === "failed"
+                          ? "bg-red-50 text-red-700 border border-red-200"
+                          : "bg-amber-50 text-amber-700 border border-amber-200"
+                      }`}>
+                        {activeDoc.processing_status === "complete"
+                          ? "Processed"
+                          : activeDoc.processing_status === "failed"
+                          ? "Failed"
+                          : "Processing"}
+                      </span>
+                      <a
+                        href={activeDoc.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                        title="Download or open original file"
+                      >
+                        <DownloadIcon className="w-4 h-4" />
+                      </a>
+                    </div>
                   </div>
 
-                  {/* PDF viewer with real ELA / copy-move overlays drawn on top */}
                   <div className="mt-3">
-                    <PdfOverlayViewer fileUrl={viewerUrl ?? activeDoc.file_url} overlays={getCheckOverlays(activeDoc.checks, caseDetail?.cross_document_findings ?? [], activeDoc.id)} />
-                  </div>
-
-                  {/* Extracted fields */}
-                  <div className="mt-3">
-                    {!activeDoc.extracted_fields ? (
-                      <div className="bg-slate-50 rounded-lg border border-slate-200/70 p-4 text-center text-xs text-slate-400">
-                        {activeDoc.processing_status === "failed"
-                          ? `Extraction failed${activeDoc.processing_error ? `: ${activeDoc.processing_error}` : "."}`
-                          : "Extraction pending — OCR and field extraction haven't completed yet."}
-                      </div>
-                    ) : (
-                      <div className="bg-slate-50 rounded-lg border border-slate-200/70 p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                            Extracted fields
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-500">
-                            Classification confidence: {(activeDoc.extracted_fields.document_type_confidence * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
-                          <div>
-                            <dt className="text-[10px] uppercase font-bold text-slate-400">Issuer</dt>
-                            <dd className="font-semibold text-slate-800 truncate">
-                              {activeDoc.extracted_fields.core_fields.issuer.value ?? "—"}
-                              {activeDoc.extracted_fields.core_fields.issuer.uncertain && (
-                                <span className="ml-1 text-amber-600 font-normal">(uncertain)</span>
-                              )}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-[10px] uppercase font-bold text-slate-400">Reference #</dt>
-                            <dd className="font-semibold text-slate-800 truncate">
-                              {activeDoc.extracted_fields.core_fields.reference_number.value ?? "—"}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-[10px] uppercase font-bold text-slate-400">Date</dt>
-                            <dd className="font-semibold text-slate-800 truncate">
-                              {activeDoc.extracted_fields.core_fields.date.value ??
-                                activeDoc.extracted_fields.core_fields.date.raw_text ??
-                                "—"}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-[10px] uppercase font-bold text-slate-400">Subtotal</dt>
-                            <dd className="font-semibold text-slate-800 truncate">
-                              {activeDoc.extracted_fields.core_fields.subtotal.value != null
-                                ? `${activeDoc.extracted_fields.core_fields.subtotal.currency ?? ""} ${activeDoc.extracted_fields.core_fields.subtotal.value.toLocaleString()}`
-                                : "—"}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-[10px] uppercase font-bold text-slate-400">Tax</dt>
-                            <dd className="font-semibold text-slate-800 truncate">
-                              {activeDoc.extracted_fields.core_fields.tax_amount.value != null
-                                ? `${activeDoc.extracted_fields.core_fields.tax_amount.currency ?? ""} ${activeDoc.extracted_fields.core_fields.tax_amount.value.toLocaleString()}`
-                                : "—"}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-[10px] uppercase font-bold text-slate-400">Total</dt>
-                            <dd className="font-bold text-slate-900 truncate">
-                              {activeDoc.extracted_fields.core_fields.amount.value != null
-                                ? `${activeDoc.extracted_fields.core_fields.amount.currency ?? ""} ${activeDoc.extracted_fields.core_fields.amount.value.toLocaleString()}`
-                                : "—"}
-                            </dd>
-                          </div>
-                        </dl>
-                        {activeDoc.extracted_fields.additional_fields.length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-slate-200/70 space-y-1">
-                            {activeDoc.extracted_fields.additional_fields.map((f, i) => (
-                              <div key={i} className="flex justify-between text-[11px] font-mono text-slate-600">
-                                <span className="truncate">{f.field_name}</span>
-                                <span className="font-semibold text-slate-800">{f.value ?? "—"}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Bottom Metadata Strip */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-3 mt-3 border-t border-slate-100 text-xs">
-                    <InfoChip
-                      caption="File integrity"
-                      icon={CheckCircle2Icon}
-                      value={<span className="font-mono">{activeDoc.file_hash.slice(0, 12)}...</span>}
-                    />
-                    <InfoChip
-                      caption="Classification"
-                      value={activeDoc.document_type ? DOCUMENT_TYPE_LABELS[activeDoc.document_type] ?? activeDoc.document_type : "Pending"}
-                    />
-                    <InfoChip
-                      caption="Extraction"
-                      value={
-                        activeDoc.extracted_fields
-                          ? (() => {
-                              const { filled, total } = countCompleteCoreFields(activeDoc.extracted_fields)
-                              return `${filled} / ${total} fields`
-                            })()
-                          : activeDoc.processing_status
-                      }
+                    <PdfOverlayViewer
+                      fileUrl={viewerUrl ?? activeDoc.file_url}
+                      originalFilename={activeDoc.original_filename}
+                      overlays={[]}
+                      selectedBox={selectedBox}
                     />
                   </div>
                 </div>
-              </>
-            )}
-          </section>
-
-          {/* RIGHT COLUMN: Risk & Findings */}
-          <section aria-label="Risk and Explainable Findings" className="lg:col-span-4 flex flex-col space-y-4 min-w-0">
-            {isReviewerRole && (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500">Risk assessment</span>
-                {caseDetail && <RiskBadge tier={caseDetail.assessment?.tier ?? null} />}
-              </div>
-              {caseDetail?.assessment ? (
-                <>
-                  <div className="mt-3 flex items-baseline gap-1.5">
-                    <span className="text-4xl font-extrabold tracking-tight text-slate-900">{caseDetail.assessment.score}</span>
-                    <span className="text-sm font-semibold text-slate-400">/ 100</span>
-                  </div>
-                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className={
-                        caseDetail.assessment.tier === "high"
-                          ? "h-2 rounded-full bg-red-500"
-                          : caseDetail.assessment.tier === "medium"
-                            ? "h-2 rounded-full bg-amber-500"
-                            : "h-2 rounded-full bg-emerald-500"
-                      }
-                      style={{ width: `${caseDetail.assessment.score}%` }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-2 leading-relaxed break-words [overflow-wrap:anywhere]">
-                    Sum of the weights of {caseDetail.assessment.triggered_reasons.length} triggered rule
-                    {caseDetail.assessment.triggered_reasons.length === 1 ? "" : "s"}
-                    {caseDetail.assessment.group_caps?.metadata
-                      ? ` (metadata rules: ${caseDetail.assessment.group_caps.metadata.points} points, counted as ${caseDetail.assessment.group_caps.metadata.cap})`
-                      : ""}
-                    , capped at 100. Tiers: medium from{" "}
-                    {caseDetail.assessment.thresholds.medium ?? "—"}, high from {caseDetail.assessment.thresholds.high ?? "—"}
-                    {" "}(as configured when scored). Advisory — for reviewer use.
-                  </p>
-                </>
-              ) : caseDetail ? (
-                <p className="text-[11px] text-slate-500 mt-2 leading-relaxed break-words [overflow-wrap:anywhere]">
-                  Analyzing — the risk score appears once every automated check for this case has finished.
-                  {caseDetail.pipeline.pending.length > 0 && (
-                    <span className="block mt-1 text-slate-400">
-                      Waiting on: {caseDetail.pipeline.pending.slice(0, 3).join("; ")}
-                      {caseDetail.pipeline.pending.length > 3 ? ` (+${caseDetail.pipeline.pending.length - 3} more)` : ""}
-                    </span>
-                  )}
-                </p>
-              ) : null}
-            </div>
-            )}
-
-            {caseDetail && token && <CaseDecisionPanel caseDetail={caseDetail} role={user?.role} token={token} />}
-
-            {isReviewerRole && (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col flex-1 min-w-0">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                  Explainable findings
-                </h3>
-                <span className="text-xs font-semibold text-slate-400">
-                  {reasons.length} signal{reasons.length === 1 ? "" : "s"}
-                </span>
-              </div>
-              <div className="space-y-3.5 min-w-0">
-                {!caseDetail ? (
-                  <p className="text-xs text-slate-400">Loading...</p>
-                ) : !caseDetail.assessment ? (
-                  <p className="text-xs text-slate-400">Findings appear here once the automated checks finish.</p>
-                ) : reasons.length === 0 ? (
-                  <p className="text-xs text-slate-400">No risk signals fired for this case.</p>
-                ) : (
-                  <>
-                    {visibleReasons.map((r, i) => (
-                      <SeverityFinding
-                        key={`${r.rule_id}:${r.document_id ?? "case"}:${i}`}
-                        title={r.title || r.rule_id}
-                        description={r.short || r.reason}
-                        detail={r.short ? r.reason : undefined}
-                        pointDelta={r.weight}
-                        tone={SEVERITY_TONE[r.severity] ?? "warning"}
-                      />
-                    ))}
-                    {hiddenReasonCount > 0 && (
-                      <p className="text-[11px] text-slate-400 pt-1 break-words [overflow-wrap:anywhere]">
-                        +{hiddenReasonCount} more lower-weight signal{hiddenReasonCount === 1 ? "" : "s"} contributed to the score.
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-            )}
-
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col flex-1 min-w-0">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                  Document checks
-                </h3>
-                <span className="text-xs font-semibold text-slate-400">
-                  {activeDoc ? `${activeDoc.checks.length + 1} check${activeDoc.checks.length === 0 ? "" : "s"}` : ""}
-                </span>
-              </div>
-              {activeDoc ? (
-                <DocumentChecksPanel
-                  checks={activeDoc.checks}
-                  crossDocumentFindings={activeDocCrossFindings}
-                  hasEnoughDocumentsForCrossCheck={documents.length >= 2}
-                  signatureMatches={activeDocSignatureMatches}
-                />
-              ) : (
-                <p className="text-xs text-slate-400">Select a document to view its checks.</p>
               )}
             </div>
-          </section>
-        </div>
+
+            {/* RIGHT COLUMN: ~40% (col-span-5) Identity Findings + Person Details Panel */}
+            <div className="lg:col-span-5 flex flex-col gap-5 min-w-0">
+              {/* Household context banner if case is linked to a family member */}
+              {caseDetail?.family_member && (
+                <div className="flex items-center justify-between p-3.5 rounded-xl bg-blue-50/60 border border-blue-200/80 text-xs text-foreground">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+                      <UsersIcon className="size-4" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-blue-950">
+                        Household: {caseDetail.family_member.full_name} ({caseDetail.family_member.relation})
+                      </p>
+                      <p className="text-[11px] text-blue-700">
+                        Cross-member consistency checks are active for this family.
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    to={`/families/${caseDetail.family_member.family_id}`}
+                    className="text-xs font-semibold text-blue-700 hover:underline shrink-0"
+                  >
+                    View family →
+                  </Link>
+                </div>
+              )}
+
+              {/* Contradictions & Differences Panel */}
+              <IdentityFindingsPanel
+                findings={caseDetail?.cross_document_findings ?? []}
+                documents={documents}
+                isProcessing={!caseDetail?.pipeline.complete}
+                caseId={caseDetail?.id}
+                canAct={caseDetail?.can_act}
+                caseStatus={caseDetail?.status}
+                findingCounts={caseDetail?.finding_counts}
+                catalog={catalog}
+                currentLang={currentLang}
+                token={token}
+              />
+
+              {/* Profile View Switcher: "Verified profile" vs "Per document" */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-lg text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setDetailsView("profile")}
+                    className={cn(
+                      "px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5",
+                      detailsView === "profile"
+                        ? "bg-card text-foreground shadow-2xs font-bold"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <ShieldCheckIcon className="size-3.5 text-primary" />
+                    <span>Verified profile</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailsView("document")}
+                    className={cn(
+                      "px-3 py-1.5 rounded-md transition-all flex items-center gap-1.5",
+                      detailsView === "document"
+                        ? "bg-card text-foreground shadow-2xs font-bold"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <FileTextIcon className="size-3.5" />
+                    <span>Per document</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Verified Profile Card OR Per-document Person details panel */}
+              {detailsView === "profile" ? (
+                <VerifiedProfilePanel
+                  profile={caseProfile}
+                  isLoading={isProfileLoading}
+                  caseId={caseId!}
+                  canAct={caseDetail?.can_act}
+                  caseStatus={caseDetail?.status}
+                  documents={documents}
+                  catalog={catalog}
+                  currentLang={currentLang}
+                  token={token}
+                />
+              ) : (
+                <PersonDetailsPanel
+                  extractedFields={
+                    activeDoc?.extracted_fields?.schema === "identity"
+                      ? (activeDoc.extracted_fields as IdentityExtractedFields)
+                      : null
+                  }
+                  processingStatus={activeDoc?.processing_status}
+                  processingError={activeDoc?.processing_error}
+                  selectedBox={selectedBox}
+                  onSelectField={(box) => setSelectedBox(box)}
+                  catalog={catalog}
+                />
+              )}
+
+              {/* Fill a form section */}
+              <FormsListSection
+                caseId={caseId!}
+                caseType={caseDetail?.case_type}
+                currentLang={currentLang}
+                token={token}
+              />
+
+              {caseDetail && token && (
+                <CaseDecisionPanel caseDetail={caseDetail} role={user?.role} token={token} />
+              )}
+            </div>
+          </div>
+        ) : (
+          /* ================= INVOICE / CLAIM CASE 3-COLUMN LAYOUT ================= */
+          <>
+            {/* Mobile / Tablet Evidence Switcher (< lg) */}
+            {documents.length > 1 && (
+              <div className="lg:hidden flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth pb-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
+                  Evidence:
+                </span>
+                {documents.map((doc, idx) => {
+                  const isSelected = selectedDocIndex === idx
+                  const failed = doc.checks?.some((c) => c.status === "failed")
+                  return (
+                    <button
+                      key={doc.id}
+                      type="button"
+                      onClick={() => setSelectedDocIndex(idx)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 whitespace-nowrap transition border ${
+                        isSelected
+                          ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span className={`size-1.5 rounded-full ${isSelected ? "bg-white" : failed ? "bg-rose-500" : "bg-emerald-500"}`} />
+                      <span className="max-w-[140px] truncate">{doc.original_filename}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+              {/* LEFT SIDEBAR: Documents & Case Flags */}
+              <aside aria-label="Documents in Case" className="lg:col-span-3 flex flex-col space-y-4">
+                {isCaseLoading && (
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm text-xs text-slate-400">
+                    Loading case...
+                  </div>
+                )}
+                {caseDetail && isReviewerRole && (
+                  <div className={`border rounded-xl p-4 shadow-sm ${FLAG_CARD_CLASSES[caseDetail.flag.flag]}`}>
+                    <div className="flex items-start space-x-3">
+                      <div className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center mt-0.5 ${FLAG_ICON_CLASSES[caseDetail.flag.flag]}`}>
+                        {caseDetail.flag.flag === "low" ? (
+                          <CheckCircle2Icon className="w-4 h-4" />
+                        ) : caseDetail.flag.flag === "pending" ? (
+                          <ClockIcon className="w-4 h-4" />
+                        ) : (
+                          <AlertTriangleIcon className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className={`text-xs font-bold leading-tight ${FLAG_TITLE_CLASSES[caseDetail.flag.flag]}`}>
+                          {caseDetail.flag.label}
+                          {caseDetail.flag.score !== null && (
+                            <span className="ml-1.5 font-mono font-semibold opacity-70">{caseDetail.flag.score}/100</span>
+                          )}
+                        </h3>
+                        <p className={`text-xs leading-relaxed mt-2 break-words [overflow-wrap:anywhere] ${FLAG_TEXT_CLASSES[caseDetail.flag.flag]}`}>
+                          {caseDetail.flag.description}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="hidden lg:flex bg-white rounded-xl border border-slate-200/80 p-4 shadow-sm flex-col flex-1">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Documents ({documents.length})
+                    </span>
+                  </div>
+                  <div className="space-y-2.5">
+                    {documents.length === 0 && !isCaseLoading && (
+                      <p className="text-xs text-slate-400 py-4 text-center">No documents uploaded yet.</p>
+                    )}
+                    {documents.map((doc, idx) => {
+                      const isSelected = selectedDocIndex === idx
+                      const totalChecks = doc.checks?.length ?? 0
+                      const resultOf = (c: { status: string; result: Record<string, unknown> | null }) =>
+                        c.status === "completed" ? String(c.result?.result ?? "") : c.status
+                      const countOf = (r: string) => doc.checks?.filter((c) => resultOf(c) === r).length ?? 0
+                      const flaggedChecks = countOf("flag")
+                      const passedChecks = countOf("pass")
+                      const limitedChecks = countOf("limited")
+                      const failedChecks = countOf("failed")
+                      const docTypeLabel = doc.document_type
+                        ? DOCUMENT_TYPE_LABELS[doc.document_type] ?? doc.document_type
+                        : "Classification pending"
+                      const statusParts = [
+                        flaggedChecks > 0 && `${flaggedChecks} flagged`,
+                        limitedChecks > 0 && `${limitedChecks} limited`,
+                        failedChecks > 0 && `${failedChecks} failed to run`,
+                        passedChecks > 0 && `${passedChecks} passed`,
+                      ].filter(Boolean)
+                      const statusText =
+                        totalChecks === 0
+                          ? "No checks run yet"
+                          : flaggedChecks + limitedChecks + failedChecks === 0
+                          ? `All ${passedChecks} check${passedChecks === 1 ? "" : "s"} passed`
+                          : statusParts.join(" · ")
+
+                      return (
+                        <div
+                          key={doc.id}
+                          onClick={() => setSelectedDocIndex(idx)}
+                          className={`relative rounded-lg p-3 cursor-pointer shadow-sm transition-colors ${
+                            isSelected
+                              ? "bg-blue-50/70 border-2 border-blue-600"
+                              : "border border-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start space-x-2.5 min-w-0">
+                              <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 ${
+                                isSelected ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"
+                              }`}>
+                                <FileTextIcon className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="text-xs font-bold text-slate-900 leading-tight truncate" title={doc.original_filename}>
+                                  {doc.original_filename}
+                                </h4>
+                                <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                                  {docTypeLabel}
+                                </p>
+                                <div className="flex items-center gap-1.5 mt-2">
+                                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                    totalChecks === 0
+                                      ? "bg-slate-300"
+                                      : flaggedChecks + failedChecks > 0
+                                      ? "bg-red-500"
+                                      : limitedChecks > 0
+                                      ? "bg-amber-500"
+                                      : "bg-emerald-500"
+                                  }`}></span>
+                                  <span className={`text-[10px] font-semibold ${flaggedChecks + failedChecks > 0 ? "text-red-600" : "text-slate-600"}`}>
+                                    {statusText}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <span className="text-[10px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded flex-shrink-0">Active</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </aside>
+
+              {/* CENTER COLUMN: Document Detail + Checks */}
+              <section aria-label="Document Detail and Checks" className="lg:col-span-5 flex flex-col space-y-3">
+                {!activeDoc ? (
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center text-sm text-slate-400">
+                    {isCaseLoading ? "Loading document..." : "No document selected."}
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Evidence {String(selectedDocIndex + 1).padStart(2, "0")}
+                        </span>
+                        <h2 className="text-sm font-bold text-slate-800">
+                          {DOCUMENT_TYPE_LABELS[activeDoc.document_type ?? ""] ?? activeDoc.original_filename}
+                        </h2>
+                      </div>
+                      <a
+                        href={activeDoc.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                        title="Download or open original file"
+                      >
+                        <DownloadIcon className="w-4 h-4" />
+                      </a>
+                    </div>
+
+                    <div className="mt-3">
+                      <PdfOverlayViewer fileUrl={viewerUrl ?? activeDoc.file_url} overlays={getCheckOverlays(activeDoc.checks, caseDetail?.cross_document_findings ?? [], activeDoc.id)} />
+                    </div>
+
+                    {/* Extracted fields */}
+                    <div className="mt-3">
+                      {!activeDoc.extracted_fields ? (
+                        <div className="bg-slate-50 rounded-lg border border-slate-200/70 p-4 text-center text-xs text-slate-400">
+                          {activeDoc.processing_status === "failed"
+                            ? `Extraction failed${activeDoc.processing_error ? `: ${activeDoc.processing_error}` : "."}`
+                            : "Extraction pending — OCR and field extraction haven't completed yet."}
+                        </div>
+                      ) : (
+                        <div className="bg-slate-50 rounded-lg border border-slate-200/70 p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                              Extracted fields
+                            </span>
+                            <span className="text-[10px] font-mono text-slate-500">
+                              Classification confidence: {(activeDoc.extracted_fields.document_type_confidence * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
+                            <div>
+                              <dt className="text-[10px] uppercase font-bold text-slate-400">Issuer</dt>
+                              <dd className="font-semibold text-slate-800 truncate">
+                                {activeDoc.extracted_fields.core_fields?.issuer?.value ?? "—"}
+                                {activeDoc.extracted_fields.core_fields?.issuer?.uncertain && (
+                                  <span className="ml-1 text-amber-600 font-normal">(uncertain)</span>
+                                )}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] uppercase font-bold text-slate-400">Reference #</dt>
+                              <dd className="font-semibold text-slate-800 truncate">
+                                {activeDoc.extracted_fields.core_fields?.reference_number?.value ?? "—"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] uppercase font-bold text-slate-400">Date</dt>
+                              <dd className="font-semibold text-slate-800 truncate">
+                                {activeDoc.extracted_fields.core_fields?.date?.value ??
+                                  activeDoc.extracted_fields.core_fields?.date?.raw_text ??
+                                  "—"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] uppercase font-bold text-slate-400">Subtotal</dt>
+                              <dd className="font-semibold text-slate-800 truncate">
+                                {activeDoc.extracted_fields.core_fields?.subtotal?.value != null
+                                  ? `${activeDoc.extracted_fields.core_fields.subtotal.currency ?? ""} ${activeDoc.extracted_fields.core_fields.subtotal.value.toLocaleString()}`
+                                  : "—"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] uppercase font-bold text-slate-400">Tax</dt>
+                              <dd className="font-semibold text-slate-800 truncate">
+                                {activeDoc.extracted_fields.core_fields?.tax_amount?.value != null
+                                  ? `${activeDoc.extracted_fields.core_fields.tax_amount.currency ?? ""} ${activeDoc.extracted_fields.core_fields.tax_amount.value.toLocaleString()}`
+                                  : "—"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] uppercase font-bold text-slate-400">Total</dt>
+                              <dd className="font-bold text-slate-900 truncate">
+                                {activeDoc.extracted_fields.core_fields?.amount?.value != null
+                                  ? `${activeDoc.extracted_fields.core_fields.amount.currency ?? ""} ${activeDoc.extracted_fields.core_fields.amount.value.toLocaleString()}`
+                                  : "—"}
+                              </dd>
+                            </div>
+                          </dl>
+                          {activeDoc.extracted_fields.additional_fields?.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-slate-200/70 space-y-1">
+                              {activeDoc.extracted_fields.additional_fields.map((f, i) => (
+                                <div key={i} className="flex justify-between text-[11px] font-mono text-slate-600">
+                                  <span className="truncate">{f.field_name}</span>
+                                  <span className="font-semibold text-slate-800">{f.value ?? "—"}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bottom Metadata Strip */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-3 mt-3 border-t border-slate-100 text-xs">
+                      <InfoChip
+                        caption="File integrity"
+                        icon={CheckCircle2Icon}
+                        value={<span className="font-mono">{activeDoc.file_hash.slice(0, 12)}...</span>}
+                      />
+                      <InfoChip
+                        caption="Classification"
+                        value={activeDoc.document_type ? DOCUMENT_TYPE_LABELS[activeDoc.document_type] ?? activeDoc.document_type : "Pending"}
+                      />
+                      <InfoChip
+                        caption="Extraction"
+                        value={
+                          activeDoc.extracted_fields
+                            ? (() => {
+                                const { filled, total } = countCompleteCoreFields(activeDoc.extracted_fields)
+                                return `${filled} / ${total} fields`
+                              })()
+                            : activeDoc.processing_status
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              {/* RIGHT COLUMN: Risk & Findings */}
+              <section aria-label="Risk and Explainable Findings" className="lg:col-span-4 flex flex-col space-y-4 min-w-0">
+                {isReviewerRole && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500">Risk assessment</span>
+                    {caseDetail && <RiskBadge tier={caseDetail.assessment?.tier ?? null} />}
+                  </div>
+                  {caseDetail?.assessment ? (
+                    <>
+                      <div className="mt-3 flex items-baseline gap-1.5">
+                        <span className="text-4xl font-extrabold tracking-tight text-slate-900">{caseDetail.assessment.score}</span>
+                        <span className="text-sm font-semibold text-slate-400">/ 100</span>
+                      </div>
+                      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={
+                            caseDetail.assessment.tier === "high"
+                              ? "h-2 rounded-full bg-red-500"
+                              : caseDetail.assessment.tier === "medium"
+                                ? "h-2 rounded-full bg-amber-500"
+                                : "h-2 rounded-full bg-emerald-500"
+                          }
+                          style={{ width: `${caseDetail.assessment.score}%` }}
+                        />
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-2 leading-relaxed break-words [overflow-wrap:anywhere]">
+                        Sum of the weights of {caseDetail.assessment.triggered_reasons.length} triggered rule
+                        {caseDetail.assessment.triggered_reasons.length === 1 ? "" : "s"}
+                        {caseDetail.assessment.group_caps?.metadata
+                          ? ` (metadata rules: ${caseDetail.assessment.group_caps.metadata.points} points, counted as ${caseDetail.assessment.group_caps.metadata.cap})`
+                          : ""}
+                        , capped at 100. Tiers: medium from{" "}
+                        {caseDetail.assessment.thresholds.medium ?? "—"}, high from {caseDetail.assessment.thresholds.high ?? "—"}
+                        {" "}(as configured when scored). Advisory — for reviewer use.
+                      </p>
+                    </>
+                  ) : caseDetail ? (
+                    <p className="text-[11px] text-slate-500 mt-2 leading-relaxed break-words [overflow-wrap:anywhere]">
+                      Analyzing — the risk score appears once every automated check for this case has finished.
+                      {caseDetail.pipeline.pending.length > 0 && (
+                        <span className="block mt-1 text-slate-400">
+                          Waiting on: {caseDetail.pipeline.pending.slice(0, 3).join("; ")}
+                          {caseDetail.pipeline.pending.length > 3 ? ` (+${caseDetail.pipeline.pending.length - 3} more)` : ""}
+                        </span>
+                      )}
+                    </p>
+                  ) : null}
+                </div>
+                )}
+
+                {caseDetail && token && <CaseDecisionPanel caseDetail={caseDetail} role={user?.role} token={token} />}
+
+                {isReviewerRole && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col flex-1 min-w-0">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                      Explainable findings
+                    </h3>
+                    <span className="text-xs font-semibold text-slate-400">
+                      {reasons.length} signal{reasons.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <div className="space-y-3.5 min-w-0">
+                    {!caseDetail ? (
+                      <p className="text-xs text-slate-400">Loading...</p>
+                    ) : !caseDetail.assessment ? (
+                      <p className="text-xs text-slate-400">Findings appear here once the automated checks finish.</p>
+                    ) : reasons.length === 0 ? (
+                      <p className="text-xs text-slate-400">No risk signals fired for this case.</p>
+                    ) : (
+                      <>
+                        {visibleReasons.map((r, i) => (
+                          <SeverityFinding
+                            key={`${r.rule_id}:${r.document_id ?? "case"}:${i}`}
+                            title={r.title || r.rule_id}
+                            description={r.short || r.reason}
+                            detail={r.short ? r.reason : undefined}
+                            pointDelta={r.weight}
+                            tone={SEVERITY_TONE[r.severity] ?? "warning"}
+                          />
+                        ))}
+                        {hiddenReasonCount > 0 && (
+                          <p className="text-[11px] text-slate-400 pt-1 break-words [overflow-wrap:anywhere]">
+                            +{hiddenReasonCount} more lower-weight signal{hiddenReasonCount === 1 ? "" : "s"} contributed to the score.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+                )}
+
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col flex-1 min-w-0">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                      Document checks
+                    </h3>
+                    <span className="text-xs font-semibold text-slate-400">
+                      {activeDoc ? `${activeDoc.checks.length + 1} check${activeDoc.checks.length === 0 ? "" : "s"}` : ""}
+                    </span>
+                  </div>
+                  {activeDoc ? (
+                    <DocumentChecksPanel
+                      checks={activeDoc.checks}
+                      crossDocumentFindings={activeDocCrossFindings}
+                      hasEnoughDocumentsForCrossCheck={documents.length >= 2}
+                      signatureMatches={activeDocSignatureMatches}
+                    />
+                  ) : (
+                    <p className="text-xs text-slate-400">Select a document to view its checks.</p>
+                  )}
+                </div>
+              </section>
+            </div>
+          </>
+        )}
 
         <ActivityTimeline entries={auditLog ?? []} isLoading={isAuditLoading} />
       </main>

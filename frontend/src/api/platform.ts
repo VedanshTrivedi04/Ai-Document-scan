@@ -7,6 +7,7 @@ import type { RiskRuleCreate, RuleSeverity } from "@/types/settings"
 export interface Company {
   id: string
   name: string
+  subdomain: string | null
   is_active: boolean
   created_at: string
   user_count: number
@@ -15,8 +16,14 @@ export interface Company {
   max_zip_size_mb: number
 }
 
+export interface CompanyCreatePayload {
+  name: string
+  subdomain?: string | null
+}
+
 export interface CompanyUpdatePayload {
   name?: string
+  subdomain?: string | null
   is_active?: boolean
   max_file_size_mb?: number
   max_zip_size_mb?: number
@@ -24,8 +31,17 @@ export interface CompanyUpdatePayload {
 
 export const listCompanies = (token: string) => apiFetch<Company[]>("/platform/companies", { token })
 
-export const createCompany = (name: string, token: string) =>
-  apiFetch<Company>("/platform/companies", { method: "POST", token, body: JSON.stringify({ name }) })
+export const createCompany = (
+  payload: CompanyCreatePayload | string,
+  token: string
+) => {
+  const body = typeof payload === "string" ? { name: payload } : payload
+  return apiFetch<Company>("/platform/companies", {
+    method: "POST",
+    token,
+    body: JSON.stringify(body),
+  })
+}
 
 export const updateCompany = (id: string, payload: CompanyUpdatePayload, token: string) =>
   apiFetch<Company>(`/platform/companies/${id}`, { method: "PATCH", token, body: JSON.stringify(payload) })

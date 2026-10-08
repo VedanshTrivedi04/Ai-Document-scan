@@ -47,7 +47,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditLog
-from app.models.case import Case, CaseStatus, RiskTier
+from app.models.case import Case, CaseStatus, RiskTier, is_identity_case_type
 from app.models.case_risk_assessment import CaseRiskAssessment
 from app.models.cross_document_finding import CrossDocumentFinding
 from app.models.document import Document, DocumentProcessingStatus
@@ -203,12 +203,22 @@ def pipeline_status(db: Session, company_id: uuid.UUID, case_id: uuid.UUID) -> P
         if status in _TERMINAL_CHECK_STATUSES:
             done.setdefault(document_id, set()).add(check_type)
 
+    # An identity bundle runs extraction and the case-level comparison only
+    # (app/services/identity_documents.py): no per-document checks to wait for.
+    identity_case = is_identity_case_type(
+        db.execute(
+            select(Case.case_type).where(Case.id == case_id, Case.company_id == company_id)
+        ).scalar_one_or_none()
+    )
+
     pending: list[str] = []
     for doc in documents:
         name = doc.original_filename
         if doc.processing_status not in _TERMINAL_DOC_STATUSES:
             pending.append(f"Text extraction and classification of '{name}'")
             continue  # its downstream checks can't be judged yet
+        if identity_case:
+            continue
         finished = done.get(doc.id, set())
         if doc.processing_status == DocumentProcessingStatus.complete:
             for check_type in (DocumentCheckType.field_validation, DocumentCheckType.issuer_verification):

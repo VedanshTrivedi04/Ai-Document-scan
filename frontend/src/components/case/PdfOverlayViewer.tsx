@@ -33,7 +33,16 @@ import type { BoundingBox } from "@/types/case"
 // scan converted to editable text, with no live text on top (deleted) or
 // running on past it (shortened) — backend/app/services/forensics/
 // ghost_content.py.
-export type OverlayColor = "destructive" | "warning" | "ai" | "field" | "font" | "ghost"
+export type OverlayColor =
+  | "destructive"
+  | "warning"
+  | "ai"
+  | "field"
+  | "font"
+  | "ghost"
+  | "selected"
+  | "neutral"
+  | "critical"
 
 export interface OverlayBox {
   box: BoundingBox
@@ -43,20 +52,26 @@ export interface OverlayBox {
 
 const OVERLAY_COLOR_CLASSES: Record<OverlayColor, string> = {
   destructive: "border-destructive bg-destructive/20",
+  critical: "border-red-600 bg-red-600/25 ring-2 ring-red-500/60 shadow-sm",
   warning: "border-warning bg-warning/25",
   ai: "border-dashed border-info bg-info/10",
   field: "border-violet-600 bg-violet-600/15",
   font: "border-fuchsia-600 bg-fuchsia-600/15",
   ghost: "border-teal-600 bg-teal-600/20",
+  selected: "border-blue-600 bg-blue-500/30 ring-2 ring-blue-500/50 shadow-md",
+  neutral: "border-slate-400 bg-slate-200/20 ring-1 ring-slate-400/40",
 }
 
 const OVERLAY_COLOR_LEGEND: Record<OverlayColor, string> = {
   destructive: "ELA tampering",
-  warning: "Copy-move",
+  critical: "Critical conflict",
+  warning: "Difference / mismatch",
   ai: "AI-described area (approximate)",
   field: "Field exception",
   font: "Font mismatch",
   ghost: "Deleted / replaced content",
+  selected: "Selected field",
+  neutral: "Ignored difference",
 }
 
 // react-pdf/pdf.js can throw synchronously during render on a load
@@ -93,19 +108,122 @@ class PdfViewerErrorBoundary extends React.Component<
 // annotated/burned-in image is ever generated or stored, this is drawn
 // live over the real PDF render, and disappears the moment `overlays`
 // goes back to empty (the check gets collapsed).
-export function PdfOverlayViewer(props: { fileUrl: string; overlays: OverlayBox[] }) {
+function isImageFile(url: string, filename?: string): boolean {
+  const target = (filename || url).split("?")[0].toLowerCase()
+  return (
+    target.endsWith(".jpg") ||
+    target.endsWith(".jpeg") ||
+    target.endsWith(".png") ||
+    target.endsWith(".tif") ||
+    target.endsWith(".tiff")
+  )
+}
+
+export function PdfOverlayViewer(props: {
+  fileUrl: string
+  originalFilename?: string
+  overlays: OverlayBox[]
+  selectedBox?: BoundingBox | null
+  selectedBoxColor?: OverlayColor
+}) {
+  const isImg = isImageFile(props.fileUrl, props.originalFilename)
+
+  if (isImg) {
+    return <ImageOverlayViewerInner {...props} />
+  }
+
   return (
     <PdfViewerErrorBoundary>
-      {/* react-pdf v11 suspends while it loads a file (React `use()`). Without
-          a boundary here the nearest one is the app's route-level fallback,
-          which blanked the whole case page and remounted it — refetching the
-          case, getting a new signed URL, loading again: a reload loop. */}
       <React.Suspense
         fallback={<div className="p-8 text-center text-sm text-muted-foreground">Loading document…</div>}
       >
         <PdfOverlayViewerInner {...props} />
       </React.Suspense>
     </PdfViewerErrorBoundary>
+  )
+}
+
+function ImageOverlayViewerInner({
+  fileUrl,
+  overlays,
+  selectedBox,
+  selectedBoxColor = "selected",
+}: {
+  fileUrl: string
+  overlays: OverlayBox[]
+  selectedBox?: BoundingBox | null
+  selectedBoxColor?: OverlayColor
+}) {
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const selectedRef = React.useRef<HTMLDivElement>(null)
+  const [loadError, setLoadError] = React.useState(false)
+
+  const allOverlays: OverlayBox[] = React.useMemo(() => {
+    if (selectedBox) {
+      return [...overlays, { box: selectedBox, color: selectedBoxColor, label: "Selected field" }]
+    }
+    return overlays
+  }, [overlays, selectedBox, selectedBoxColor])
+
+  React.useEffect(() => {
+    if (selectedBox && selectedRef.current) {
+      selectedRef.current.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" })
+    }
+  }, [selectedBox])
+
+  const legendColors = Array.from(new Set(allOverlays.map((o) => o.color)))
+
+  return (
+    <div ref={containerRef} className="flex flex-col gap-2 rounded-lg border bg-background p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground">Image preview (1 page)</span>
+        {legendColors.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] text-muted-foreground">
+            {legendColors.map((color) => (
+              <span key={color} className="flex items-center gap-1.5 shrink-0">
+                <span className={cn("size-2.5 rounded-sm border-2", OVERLAY_COLOR_CLASSES[color])} />
+                {OVERLAY_COLOR_LEGEND[color]}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {loadError ? (
+        <div className="p-8 text-center text-sm text-destructive">
+          Couldn't load this image for preview.
+        </div>
+      ) : (
+        <div className="relative mx-auto overflow-hidden rounded-md border bg-muted/20 max-w-full">
+          <img
+            src={fileUrl}
+            alt="Document preview"
+            onError={() => setLoadError(true)}
+            className="block max-h-[700px] w-auto max-w-full object-contain"
+          />
+          {allOverlays.map((overlay, i) => {
+            const isSelected = overlay.color === "selected"
+            return (
+              <div
+                key={i}
+                ref={isSelected ? selectedRef : undefined}
+                title={overlay.label}
+                className={cn(
+                  "pointer-events-none absolute rounded-sm border-2 transition-all",
+                  OVERLAY_COLOR_CLASSES[overlay.color]
+                )}
+                style={{
+                  left: `${overlay.box.x * 100}%`,
+                  top: `${overlay.box.y * 100}%`,
+                  width: `${overlay.box.width * 100}%`,
+                  height: `${overlay.box.height * 100}%`,
+                }}
+              />
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -120,16 +238,28 @@ const MAX_PAGE_WIDTH = 560
 function PdfOverlayViewerInner({
   fileUrl,
   overlays,
+  selectedBox,
+  selectedBoxColor = "selected",
 }: {
   fileUrl: string
   overlays: OverlayBox[]
+  selectedBox?: BoundingBox | null
+  selectedBoxColor?: OverlayColor
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null)
+  const selectedRef = React.useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = React.useState(MAX_PAGE_WIDTH)
   const [numPages, setNumPages] = React.useState(0)
   const [pageNumber, setPageNumber] = React.useState(1)
   const [pageSize, setPageSize] = React.useState<{ width: number; height: number } | null>(null)
   const [loadError, setLoadError] = React.useState(false)
+
+  const allOverlays: OverlayBox[] = React.useMemo(() => {
+    if (selectedBox) {
+      return [...overlays, { box: selectedBox, color: selectedBoxColor, label: "Selected field" }]
+    }
+    return overlays
+  }, [overlays, selectedBox, selectedBoxColor])
 
   React.useEffect(() => {
     const el = containerRef.current
@@ -142,17 +272,23 @@ function PdfOverlayViewerInner({
     return () => observer.disconnect()
   }, [])
 
-  // Jump to whatever page the newest set of overlays actually lands on
-  // — a reviewer expanding a flagged check shouldn't have to go
-  // hunting through a multi-page document to find what it's pointing at.
+  // Jump to whatever page the selected box or newest set of overlays lands on
   React.useEffect(() => {
-    if (overlays.length > 0) {
+    if (selectedBox) {
+      setPageNumber(selectedBox.page)
+    } else if (overlays.length > 0) {
       setPageNumber(overlays[0].box.page)
     }
-  }, [overlays])
+  }, [selectedBox, overlays])
 
-  const pageOverlays = overlays.filter((o) => o.box.page === pageNumber)
-  const legendColors = Array.from(new Set(overlays.map((o) => o.color)))
+  React.useEffect(() => {
+    if (selectedBox && selectedRef.current) {
+      selectedRef.current.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" })
+    }
+  }, [selectedBox, pageNumber])
+
+  const pageOverlays = allOverlays.filter((o) => o.box.page === pageNumber)
+  const legendColors = Array.from(new Set(allOverlays.map((o) => o.color)))
 
   return (
     <div ref={containerRef} className="flex flex-col gap-2 rounded-lg border bg-background p-3">
@@ -218,22 +354,26 @@ function PdfOverlayViewerInner({
               onRenderSuccess={(page) => setPageSize({ width: page.width, height: page.height })}
             />
           </Document>
-          {pageOverlays.map((overlay, i) => (
-            <div
-              key={i}
-              title={overlay.label}
-              className={cn(
-                "pointer-events-none absolute rounded-sm border-2",
-                OVERLAY_COLOR_CLASSES[overlay.color]
-              )}
-              style={{
-                left: `${overlay.box.x * 100}%`,
-                top: `${overlay.box.y * 100}%`,
-                width: `${overlay.box.width * 100}%`,
-                height: `${overlay.box.height * 100}%`,
-              }}
-            />
-          ))}
+          {pageOverlays.map((overlay, i) => {
+            const isSelected = overlay.color === "selected"
+            return (
+              <div
+                key={i}
+                ref={isSelected ? selectedRef : undefined}
+                title={overlay.label}
+                className={cn(
+                  "pointer-events-none absolute rounded-sm border-2 transition-all",
+                  OVERLAY_COLOR_CLASSES[overlay.color]
+                )}
+                style={{
+                  left: `${overlay.box.x * 100}%`,
+                  top: `${overlay.box.y * 100}%`,
+                  width: `${overlay.box.width * 100}%`,
+                  height: `${overlay.box.height * 100}%`,
+                }}
+              />
+            )
+          })}
         </div>
       )}
     </div>

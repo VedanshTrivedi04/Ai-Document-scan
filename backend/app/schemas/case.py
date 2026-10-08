@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -8,13 +8,20 @@ from app.models.case import CaseStatus, CaseTier, CaseType, RiskTier
 from app.schemas.document import CaseDocumentSummary
 from app.services.case_flag_service import CaseFlag, CaseFlagType, ForensicFinding
 from app.services.check_summaries import risk_reason_short
-from app.services.field_exception_service import cross_document_regions
+from app.models.cross_document_finding import REVIEW_PENDING, finding_resolution
+from app.services.field_exception_service import cross_document_regions, identity_finding_regions
+from app.services.identity_messages import build_message
 
 
 class CaseCreateRequest(BaseModel):
     case_type: CaseType = Field(
         description="Case-level category chosen at submission. Independent of each document's own "
         "`document_type`, which the classification step fills in later."
+    )
+    family_member_id: uuid.UUID | None = Field(
+        default=None,
+        description="The family member this bundle is for (GET /family). Only the head of that "
+        "family may set it, and only on an identity or hiring verification case.",
     )
 
 
@@ -95,12 +102,61 @@ class CrossDocumentFindingSummary(BaseModel):
     # exception box on each document, each captioned with what the other
     # showed. Empty when the fields weren't located.
     regions: list[dict[str, Any]] = []
+    # Identity contradiction findings only (app/services/identity_comparison.py):
+    # "harmless_variant" or "conflict", the named reason, and what each of
+    # the two documents shows. Null on invoice reconciliation findings.
+    classification: str | None = None
+    reason: str | None = None
+    evidence: list[dict[str, Any]] | None = None
+    # The finding in the requested language (`?lang=`): {language,
+    # field_label, severity_label, summary, explanation, action, text} -
+    # app/services/identity_messages.py. Identity findings only.
+    message: dict[str, str] | None = None
+    # The decision a reviewer made on this finding: "pending", "accepted"
+    # (the finding is right) or "dismissed" (it is not).
+    review_status: str = "pending"
+    review_note: str | None = None
+    reviewed_at: datetime | None = None
+    reviewed_by_name: str | None = None
+    # The finding once that decision is applied: "open" (a conflict nobody
+    # has decided), "conflict_confirmed" or "no_issue".
+    resolution: str = "open"
 
     model_config = {"from_attributes": True}
 
     @classmethod
-    def from_finding(cls, finding, documents_by_id: dict[str, Any] | None = None) -> "CrossDocumentFindingSummary":
+    def from_finding(
+        cls, finding, documents_by_id: dict[str, Any] | None = None, language: str = "en"
+    ) -> "CrossDocumentFindingSummary":
+        reviewer = finding.reviewed_by if finding.reviewed_by_user_id else None
+        review = {
+            "review_status": finding.review_status or REVIEW_PENDING,
+            "review_note": finding.review_note,
+            "reviewed_at": finding.reviewed_at,
+            "reviewed_by_name": (reviewer.full_name or reviewer.email) if reviewer else None,
+            "resolution": finding_resolution(finding.classification, finding.review_status or REVIEW_PENDING),
+        }
+        if finding.evidence:
+            return cls(
+                id=finding.id,
+                field_name=finding.field_name,
+                finding_type=finding.finding_type,
+                severity=finding.severity.value,
+                description=finding.description,
+                document_ids=finding.document_ids,
+                created_at=finding.created_at,
+                regions=identity_finding_regions(finding.field_name, finding.evidence),
+                classification=finding.classification,
+                reason=finding.reason,
+                evidence=finding.evidence,
+                message=build_message(
+                    finding.field_name, finding.classification, finding.reason, finding.severity.value,
+                    finding.evidence, finding.detail, language,
+                ),
+                **review,
+            )
         return cls(
+            **review,
             id=finding.id,
             field_name=finding.field_name,
             finding_type=finding.finding_type,
@@ -215,9 +271,54 @@ class CaseActionSchema(BaseModel):
     created_at: datetime
 
 
+class FindingCounts(BaseModel):
+    """The findings of a case by where they stand. `open` are conflicts
+    nobody has decided yet; `ignored_as_harmless` are the differences the
+    check itself judged harmless and no reviewer overruled."""
+
+    open: int = 0
+    conflict_confirmed: int = 0
+    no_issue: int = 0
+    ignored_as_harmless: int = 0
+
+    @classmethod
+    def from_findings(cls, findings: list["CrossDocumentFindingSummary"]) -> "FindingCounts":
+        counts = cls()
+        for finding in findings:
+            setattr(counts, finding.resolution, getattr(counts, finding.resolution) + 1)
+            if finding.classification == "harmless_variant" and finding.resolution == "no_issue":
+                counts.ignored_as_harmless += 1
+        return counts
+
+
+class FindingReviewRequest(BaseModel):
+    decision: Literal["accepted", "dismissed", "pending"] = Field(
+        ...,
+        description="`accepted`: the finding is right. `dismissed`: it is not. `pending`: undo a decision.",
+    )
+    note: str | None = Field(default=None, max_length=1000, description="Optional reason for the decision.")
+
+
+class FindingReviewResponse(BaseModel):
+    finding: CrossDocumentFindingSummary
+    finding_counts: FindingCounts
+
+
+class CaseFamilyMember(BaseModel):
+    """The family member a case was submitted for."""
+
+    id: uuid.UUID
+    family_id: uuid.UUID
+    full_name: str
+    relation: str
+
+
 class CaseDetail(CaseListItem):
+    family_member: CaseFamilyMember | None = None
     documents: list[CaseDocumentSummary]
     cross_document_findings: list[CrossDocumentFindingSummary]
+    finding_counts: FindingCounts = FindingCounts()
+    language: str = "en"
     forensic_findings: list[ForensicFindingSummary]
     assessment: RiskAssessmentSchema | None
     pipeline: PipelineStatusSchema

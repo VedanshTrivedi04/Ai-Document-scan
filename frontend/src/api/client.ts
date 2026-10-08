@@ -1,6 +1,6 @@
-// Minimal fetch wrapper. Base URL is env-var driven (SPECIFICATION.md section 4:
-// "Use environment variables for ... environment-specific config").
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api"
+
+import { getOrgSubdomain } from "@/lib/organisation"
 
 export class ApiError extends Error {
   status: number
@@ -52,11 +52,14 @@ export async function apiFetch<T>(
   path: string,
   { token, headers, ...options }: RequestOptions = {}
 ): Promise<T> {
+  const orgSubdomain = getOrgSubdomain()
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(orgSubdomain ? { "X-Org-Subdomain": orgSubdomain } : {}),
       ...headers,
     },
   })
@@ -71,6 +74,16 @@ export async function apiFetch<T>(
     } catch {
       // response had no JSON body; fall back to statusText
     }
+
+    if (response.status === 401 && !path.startsWith("/auth/login")) {
+      try {
+        localStorage.removeItem("docauth.token")
+        window.dispatchEvent(new CustomEvent("auth:unauthorized"))
+      } catch {
+        // ignore storage/event errors
+      }
+    }
+
     throw new ApiError(response.status, detail, code)
   }
 

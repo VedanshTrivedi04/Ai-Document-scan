@@ -31,6 +31,7 @@ interface QueueCase {
   company: string
   timeAgo: string
   type: string
+  rawCaseType: string
   typeCategory: "invoice" | "contract" | "bank" | "identity" | "tax"
   docCount: number
   flag: "Low risk" | "Medium risk" | "High risk" | "Analyzing"
@@ -86,6 +87,7 @@ function formatRelativeTime(date: Date): string {
 function mapApiCaseToQueueCase(c: CaseListItem): QueueCase {
   let typeCategory: QueueCase["typeCategory"] = "invoice"
   if (c.case_type.includes("bank")) typeCategory = "bank"
+  else if (c.case_type.includes("identity") || c.case_type.includes("hiring")) typeCategory = "identity"
   else if (c.case_type.includes("tax") || c.case_type.includes("school")) typeCategory = "tax"
   else if (c.case_type.includes("procurement") || c.case_type.includes("quotation")) typeCategory = "contract"
 
@@ -128,6 +130,7 @@ function mapApiCaseToQueueCase(c: CaseListItem): QueueCase {
     company: submitterName,
     timeAgo,
     type: CASE_TYPE_LABELS[c.case_type] || c.case_type,
+    rawCaseType: c.case_type,
     typeCategory,
     docCount: c.document_count,
     flag,
@@ -206,7 +209,7 @@ export function CaseQueuePage() {
       if (statusFilter === "Escalated") {
         if (!c.escalated) return false
       } else if (statusFilter && c.status !== statusFilter) return false
-      if (typeFilter && c.typeCategory !== typeFilter) return false
+      if (typeFilter && c.typeCategory !== typeFilter && c.rawCaseType !== typeFilter) return false
       if (flagFilter && c.flag !== flagFilter) return false
       return true
     })
@@ -418,15 +421,19 @@ export function CaseQueuePage() {
                 <select
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
-                  aria-label="Filter by document type"
+                  aria-label="Filter by case type"
                   className="w-full sm:w-auto appearance-none bg-white border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-medium pl-3.5 pr-8 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition shadow-2xs whitespace-nowrap"
                 >
                   <option value="">Type: All Types</option>
-                  <option value="invoice">Type: Commercial Invoice</option>
-                  <option value="contract">Type: Vendor Contract</option>
-                  <option value="bank">Type: Bank Statement</option>
-                  <option value="identity">Type: Identity Proof</option>
-                  <option value="tax">Type: Tax Clearance</option>
+                  <option value="identity_verification">Type: Identity verification</option>
+                  <option value="hiring_verification">Type: Hiring verification</option>
+                  <option value="vendor_invoice">Type: Vendor invoice</option>
+                  <option value="commercial_invoice">Type: Commercial invoice</option>
+                  <option value="procurement_documentation">Type: Procurement documentation</option>
+                  <option value="quotation">Type: Quotation</option>
+                  <option value="school_document">Type: School / educational document</option>
+                  <option value="travel_reimbursement">Type: Travel reimbursement</option>
+                  <option value="other">Type: Other</option>
                 </select>
                 <ChevronDownIcon className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-400" />
               </div>

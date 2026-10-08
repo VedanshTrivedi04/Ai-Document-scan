@@ -6,6 +6,7 @@ import { RoleRoute } from "@/components/AdminRoute"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { ActingCompanyProvider } from "@/hooks/useActingCompany"
 import { AuthProvider } from "@/hooks/useAuth"
+import { OrganisationProvider } from "@/hooks/useOrganisation"
 import { LoginPage } from "@/pages/LoginPage"
 
 // Route-level code splitting: each page (and the libraries only it uses) is
@@ -16,8 +17,10 @@ const BulkUploadDetailPage = lazy(() => import("@/pages/BulkUploadDetailPage").t
 const BulkUploadsListPage = lazy(() => import("@/pages/BulkUploadsListPage").then((m) => ({ default: m.BulkUploadsListPage })))
 const BulkUploadPage = lazy(() => import("@/pages/BulkUploadPage").then((m) => ({ default: m.BulkUploadPage })))
 const CaseDetailPage = lazy(() => import("@/pages/CaseDetailPage").then((m) => ({ default: m.CaseDetailPage })))
+const CaseFormPage = lazy(() => import("@/pages/CaseFormPage").then((m) => ({ default: m.CaseFormPage })))
 const CaseQueuePage = lazy(() => import("@/pages/CaseQueuePage").then((m) => ({ default: m.CaseQueuePage })))
 const DashboardPage = lazy(() => import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })))
+const FamilyPage = lazy(() => import("@/pages/FamilyPage").then((m) => ({ default: m.FamilyPage })))
 const MyCasesPage = lazy(() => import("@/pages/MyCasesPage").then((m) => ({ default: m.MyCasesPage })))
 const NewCasePage = lazy(() => import("@/pages/NewCasePage").then((m) => ({ default: m.NewCasePage })))
 const PlatformCompaniesPage = lazy(() => import("@/pages/PlatformCompaniesPage").then((m) => ({ default: m.PlatformCompaniesPage })))
@@ -47,9 +50,10 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AuthProvider>
-          <ActingCompanyProvider>
-          <Suspense fallback={pageFallback}>
+        <OrganisationProvider>
+          <AuthProvider>
+            <ActingCompanyProvider>
+            <Suspense fallback={pageFallback}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
 
@@ -63,10 +67,13 @@ function App() {
               <Route path="/bulk-uploads" element={<BulkUploadsListPage />} />
               <Route path="/bulk-uploads/:bulkUploadId" element={<BulkUploadDetailPage />} />
               <Route path="/cases/:caseId" element={<CaseDetailPage />} />
+              <Route path="/cases/:caseId/forms/:formId" element={<CaseFormPage />} />
 
-              {/* Operational Dashboard & My Cases */}
+              {/* Operational Dashboard, My Cases & Family */}
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/my-cases" element={<MyCasesPage />} />
+              <Route path="/family" element={<FamilyPage />} />
+              <Route path="/families/:familyId" element={<FamilyPage />} />
 
               {/* Governance & Audit — company reviewers, and platform admins (per company) */}
               <Route element={<RoleRoute minRole="reviewer_l1" platformAdmin="allow" label="Reviewer" />}>
@@ -95,7 +102,8 @@ function App() {
           </Routes>
           </Suspense>
           </ActingCompanyProvider>
-        </AuthProvider>
+          </AuthProvider>
+        </OrganisationProvider>
       </BrowserRouter>
     </QueryClientProvider>
   )

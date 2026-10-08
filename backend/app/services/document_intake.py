@@ -104,8 +104,14 @@ def record_document(
     return document
 
 
-def enqueue_document_pipeline(document_id: uuid.UUID, company_id: uuid.UUID) -> bool:
-    """One independent task per (document, step), each carrying the company
+def enqueue_document_pipeline(
+    document_id: uuid.UUID, company_id: uuid.UUID, *, forensics: bool = True
+) -> bool:
+    """`forensics=False` queues extraction only: a document of an identity
+    bundle (app/services/identity_documents.py) is compared with the other
+    documents of its case, never forensically analysed.
+
+    One independent task per (document, step), each carrying the company
     so the worker opens a session confined to it and the publish gets a
     fair-share priority (app/tasks/fairshare.py). Every step lands on the
     queue for the service it depends on (extraction / vision / forensics —
@@ -118,7 +124,7 @@ def enqueue_document_pipeline(document_id: uuid.UUID, company_id: uuid.UUID) -> 
     stuck-document job (app/tasks/stuck_documents_task.py) queues it again
     once the broker is back."""
     try:
-        _publish_pipeline(document_id, company_id)
+        _publish_pipeline(document_id, company_id, forensics=forensics)
         return True
     except Exception:  # noqa: BLE001 - broker unreachable / publish failed
         logger.exception(
@@ -129,7 +135,7 @@ def enqueue_document_pipeline(document_id: uuid.UUID, company_id: uuid.UUID) -> 
         return False
 
 
-def _publish_pipeline(document_id: uuid.UUID, company_id: uuid.UUID) -> None:
+def _publish_pipeline(document_id: uuid.UUID, company_id: uuid.UUID, *, forensics: bool = True) -> None:
     # Imported here: the task modules import services, and this module is
     # itself imported by a task (bulk ingestion).
     from app.tasks.document_processing import process_document
@@ -141,6 +147,8 @@ def _publish_pipeline(document_id: uuid.UUID, company_id: uuid.UUID) -> None:
 
     args = (str(document_id), str(company_id))
     process_document.delay(*args)
+    if not forensics:
+        return
     # All four are independent of extraction (they only read the PDF's own
     # bytes/rendered pages, not OCR text or a classified document_type), so
     # they run in parallel rather than waiting on process_document.

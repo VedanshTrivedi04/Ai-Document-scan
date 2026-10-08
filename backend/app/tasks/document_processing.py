@@ -23,17 +23,19 @@ from sqlalchemy import select
 
 from app.db import tenancy
 from app.db.session import SessionLocal
+from app.models.case import is_identity_case_type
 from app.models.document import Document, DocumentProcessingStatus
 from app.models.document_check import DocumentCheck, DocumentCheckStatus, DocumentCheckType
 from app.services.audit_service import record_event
-from app.services.check_store import save_check
+from app.services.check_store import sanitize_null_bytes, save_check
 from app.services.extraction_service import classify_and_extract
+from app.services.identity_documents import extract_identity, identity_extracted_fields
 from app.services.multi_invoice import extract_invoices
 from app.services.field_locator_service import attach_field_locations
 from app.services.forensics.font_consistency import analyze_font_consistency
 from app.services.line_item_parsing import enrich_extracted_fields
 from app.services.llm_service import get_llm_service
-from app.services.ocr_service import OCRPage, get_ocr_service
+from app.services.ocr_service import OCRPage, OCRResult, get_ocr_service
 from app.services.risk_scoring_service import request_case_scoring
 from app.services.storage_service import get_storage_service_for_task
 from app.tasks.celery_app import celery_app
@@ -109,6 +111,40 @@ def _run_font_consistency(db, document: Document, pdf_bytes: bytes | None, ocr_p
         )
 
 
+def _complete_identity_document(db, document: Document, ocr_result: OCRResult) -> None:
+    """A document of an identity bundle (app/services/identity_documents.py):
+    the person's details instead of invoice fields, and none of the
+    invoice-specific steps. The contradiction check is case-level and runs
+    once every document of the case has finished."""
+    analysis = extract_identity(get_llm_service(), ocr_result.text)
+    extracted_fields = identity_extracted_fields(analysis)
+    try:
+        fields_located = attach_field_locations(ocr_result.pages, extracted_fields)
+    except Exception:  # noqa: BLE001 - a missing highlight never fails the extraction
+        fields_located = 0
+
+    document.document_type = analysis.document_type
+    document.ocr_text = ocr_result.text
+    document.extracted_fields = sanitize_null_bytes(extracted_fields)
+    document.processing_status = DocumentProcessingStatus.complete
+    document.processing_error = None
+    record_event(
+        db,
+        "document_processing_completed",
+        case_id=document.case_id,
+        document_id=document.id,
+        event_data={
+            "document_type": analysis.document_type,
+            "document_type_confidence": analysis.document_type_confidence,
+            "fields_located": fields_located,
+            "schema": "identity",
+        },
+    )
+    db.commit()
+    _maybe_enqueue_cross_document_check(db, document.company_id, document.case_id)
+    request_case_scoring(document.case_id, document.company_id)
+
+
 @celery_app.task(name="process_document")
 def process_document(document_id: str, company_id: str | None = None) -> None:
     company_uuid = resolve_company_for_document(document_id, company_id)
@@ -126,6 +162,7 @@ def process_document(document_id: str, company_id: str | None = None) -> None:
             # audit_log row against either (it needs a real document_id FK).
             return
 
+        identity_case = is_identity_case_type(document.case.case_type)
         document.processing_status = DocumentProcessingStatus.processing
         db.commit()
 
@@ -136,6 +173,9 @@ def process_document(document_id: str, company_id: str | None = None) -> None:
             )
 
             ocr_result = get_ocr_service().analyze_url(document_url)
+            if identity_case:
+                _complete_identity_document(db, document, ocr_result)
+                return
             analysis = classify_and_extract(get_llm_service(), ocr_result.text)
 
             document.document_type = analysis.document_type
@@ -189,8 +229,6 @@ def process_document(document_id: str, company_id: str | None = None) -> None:
             # Before the document is marked complete, so the case is never
             # scored without it.
             _run_font_consistency(db, document, pdf_bytes, ocr_result.pages)
-            from app.services.check_store import sanitize_null_bytes
-
             document.extracted_fields = sanitize_null_bytes(extracted_fields)
             document.processing_status = DocumentProcessingStatus.complete
             document.processing_error = None

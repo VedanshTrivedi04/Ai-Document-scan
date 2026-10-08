@@ -10,6 +10,7 @@ import {
   SettingsIcon,
   ShieldCheckIcon,
   UploadCloudIcon,
+  UsersIcon,
   XIcon,
 } from "lucide-react"
 import { createPortal } from "react-dom"
@@ -17,6 +18,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom"
 
 import { ChangePasswordModal } from "@/components/ChangePasswordModal"
 import { useAuth } from "@/hooks/useAuth"
+import { useOrganisation } from "@/hooks/useOrganisation"
 import { cn } from "@/lib/utils"
 import { APP_FULL_NAME, APP_NAME } from "@/lib/appInfo"
 import { hasRank, type CurrentUser } from "@/types/auth"
@@ -26,6 +28,7 @@ export type NavItemId =
   | "review_queue"
   | "cases"
   | "my_cases"
+  | "family"
   | "audit_history"
   | "settings"
   | "platform"
@@ -37,6 +40,7 @@ const NAV_VISIBLE: Record<NavItemId, (u: CurrentUser | undefined) => boolean> = 
   review_queue: () => true,
   cases: () => true,
   my_cases: (u) => !u?.is_platform_admin,
+  family: (u) => !u?.is_platform_admin,
   audit_history: (u) => Boolean(u?.is_platform_admin) || hasRank(u?.role, "reviewer_l1"),
   settings: (u) => Boolean(u?.is_platform_admin) || hasRank(u?.role, "reviewer_l2"),
   platform: (u) => Boolean(u?.is_platform_admin),
@@ -46,6 +50,7 @@ const NAV_ITEMS: { id: NavItemId; label: string; icon: any; href: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutGridIcon, href: "/dashboard" },
   { id: "cases", label: "Cases", icon: ShieldCheckIcon, href: "/" },
   { id: "my_cases", label: "My cases", icon: FileTextIcon, href: "/my-cases" },
+  { id: "family", label: "My family", icon: UsersIcon, href: "/family" },
   { id: "audit_history", label: "Audit history", icon: ClockIcon, href: "/audit-history" },
   { id: "settings", label: "Settings", icon: SettingsIcon, href: "/settings/issuer-registry" },
   { id: "platform", label: "Platform", icon: BuildingIcon, href: "/platform/companies" },
@@ -70,6 +75,8 @@ export function Nav({ active, onNewUploadClick }: NavProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuth()
+  const { organisation } = useOrganisation()
+  const orgName = organisation?.name || user?.company_name
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [changingPassword, setChangingPassword] = React.useState(false)
   const displayName = user?.full_name || user?.email || ""
@@ -104,8 +111,18 @@ export function Nav({ active, onNewUploadClick }: NavProps) {
           <Link to="/" className="group flex items-center gap-2 sm:gap-2.5 shrink-0">
             <img src="/logo.png" alt="" className="size-8 sm:size-9 shrink-0 rounded-xl shadow-sm shadow-blue-500/30" />
             <div className="min-w-0">
-              <div className="text-sm sm:text-[15px] font-bold leading-tight tracking-tight text-slate-900 truncate">
-                {APP_NAME}
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-sm sm:text-[15px] font-bold leading-tight tracking-tight text-slate-900 shrink-0">
+                  {APP_NAME}
+                </span>
+                {orgName && !user?.is_platform_admin && (
+                  <>
+                    <span className="text-slate-300 font-normal shrink-0">/</span>
+                    <span className="text-xs sm:text-[13px] font-semibold text-slate-700 truncate max-w-[180px] sm:max-w-[280px]" title={orgName}>
+                      {orgName}
+                    </span>
+                  </>
+                )}
               </div>
               <div className="hidden sm:block text-[9.5px] font-semibold uppercase tracking-wider text-slate-400 truncate">
                 {APP_FULL_NAME}

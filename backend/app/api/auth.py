@@ -41,7 +41,7 @@ from app.schemas.auth import (
     TokenResponse,
     UploadLimitsResponse,
 )
-from app.services import login_throttle
+from app.services import login_throttle, subdomains
 from app.services.audit_service import record_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -64,15 +64,22 @@ def token_claims(user: User) -> dict:
 
 
 def _company_is_active(system_db: Session, company_id: uuid.UUID | None) -> bool:
+    return _company_state(system_db, company_id)[0]
+
+
+def _company_state(system_db: Session, company_id: uuid.UUID | None) -> tuple[bool, str | None]:
+    """(whether the company may be used, its subdomain). A platform admin
+    belongs to no company: usable, no subdomain."""
     if company_id is None:
-        return True
-    active = system_db.execute(
-        select(Company.is_active).where(Company.id == company_id)
-    ).scalar_one_or_none()
-    return bool(active)
+        return True, None
+    row = system_db.execute(
+        select(Company.is_active, Company.subdomain).where(Company.id == company_id)
+    ).first()
+    return (bool(row[0]), row[1]) if row else (False, None)
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
     system_db: Session = Depends(get_system_db),
 ) -> User:
@@ -104,8 +111,13 @@ def get_current_user(
             raise _unauthorized("Your account's company changed. Please sign in again.")
         if bool(payload.get("is_platform_admin", user.is_platform_admin)) != user.is_platform_admin:
             raise _unauthorized("Your account's role changed. Please sign in again.")
-        if not _company_is_active(system_db, user.company_id):
+        active, company_subdomain = _company_state(system_db, user.company_id)
+        if not active:
             raise _unauthorized("Your company's account is suspended.")
+        # A sign-in is only good on its own organisation's site.
+        requested = subdomains.from_request(request)
+        if requested is not None and requested != company_subdomain:
+            raise _unauthorized("This sign-in belongs to a different organisation. Please sign in again.")
     finally:
         tenancy.restore(system_db, state)
     return user
@@ -192,7 +204,9 @@ def require_platform_admin(current_user: User = Depends(get_current_user)) -> Us
         "JWT_ACCESS_TOKEN_EXPIRE_MINUTES). The token carries `role`, `company_id` (null for a "
         "platform admin) and `is_platform_admin`. An unknown email, a wrong password, a "
         "deactivated account and a suspended company all return the same 401 so accounts "
-        "cannot be enumerated. Throttled (app/services/login_throttle.py): after "
+        "cannot be enumerated. When the request names an organisation's subdomain "
+        "(`X-Org-Subdomain`, or the host under APP_BASE_DOMAIN), only that organisation's users can "
+        "sign in there; any other account, including a platform admin, gets the same 401. Throttled (app/services/login_throttle.py): after "
         "LOGIN_MAX_FAILED_ATTEMPTS failures an email address is refused for LOGIN_LOCKOUT_MINUTES, "
         "and each client IP gets LOGIN_MAX_ATTEMPTS_PER_IP_PER_MINUTE attempts per minute; both "
         "answer 429 with a Retry-After header."
@@ -217,11 +231,17 @@ def login(
     user = system_db.execute(
         select(User).where(func.lower(User.email) == str(payload.email).lower())
     ).scalar_one_or_none()
+    active, company_subdomain = _company_state(system_db, user.company_id) if user else (False, None)
+    # On an organisation's own site only that organisation's users sign in.
+    # Someone else's account is answered exactly like a wrong password.
+    requested = subdomains.from_request(request)
+    wrong_organisation = requested is not None and requested != company_subdomain
     if (
         user is None
         or not user.is_active
         or not verify_password(payload.password, user.hashed_password)
-        or not _company_is_active(system_db, user.company_id)
+        or not active
+        or wrong_organisation
     ):
         login_throttle.record_failure(email)
         raise HTTPException(
@@ -231,7 +251,7 @@ def login(
 
     login_throttle.record_success(email)
     access_token = create_access_token(subject=str(user.id), extra_claims=token_claims(user))
-    return TokenResponse(access_token=access_token)
+    return TokenResponse(access_token=access_token, company_subdomain=company_subdomain)
 
 
 @router.get(
@@ -251,11 +271,13 @@ def read_current_user(
     current_user: User = Depends(get_current_user),
     system_db: Session = Depends(get_system_db),
 ) -> CurrentUserResponse:
-    company_name = None
+    company_name = company_subdomain = None
     if current_user.company_id is not None:
-        company_name = system_db.execute(
-            select(Company.name).where(Company.id == current_user.company_id)
-        ).scalar_one_or_none()
+        row = system_db.execute(
+            select(Company.name, Company.subdomain).where(Company.id == current_user.company_id)
+        ).first()
+        if row:
+            company_name, company_subdomain = row
     return CurrentUserResponse(
         id=current_user.id,
         email=current_user.email,
@@ -266,6 +288,7 @@ def read_current_user(
         is_platform_admin=current_user.is_platform_admin,
         company_id=current_user.company_id,
         company_name=company_name,
+        company_subdomain=company_subdomain,
     )
 
 

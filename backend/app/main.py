@@ -15,7 +15,12 @@ from app.api.case_actions import router as case_actions_router
 from app.api.case_reports import router as case_reports_router
 from app.api.cases import router as cases_router
 from app.api.documents import router as documents_router
+from app.api.families import router as families_router
+from app.api.findings import router as findings_router
+from app.api.i18n import router as i18n_router
+from app.api.organisation import router as organisation_router
 from app.api.platform import router as platform_router
+from app.api.profiles import router as profiles_router
 from app.api.settings import router as settings_router
 from app.api.signatures import router as signatures_router
 from app.core.config import APP_FULL_NAME, APP_NAME, settings
@@ -32,6 +37,11 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(cases_router)
 app.include_router(case_actions_router)
+app.include_router(findings_router)
+app.include_router(i18n_router)
+app.include_router(organisation_router)
+app.include_router(profiles_router)
+app.include_router(families_router)
 app.include_router(case_reports_router)
 app.include_router(documents_router)
 app.include_router(bulk_uploads_router)

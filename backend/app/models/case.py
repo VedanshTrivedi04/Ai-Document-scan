@@ -15,7 +15,8 @@ not used by anything yet.
 import enum
 import uuid
 
-from sqlalchemy import Enum, ForeignKey, String
+from sqlalchemy import JSON, Enum, ForeignKey, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -66,6 +67,17 @@ class CaseType(str, enum.Enum):
     quotation = "quotation"
     travel_reimbursement = "travel_reimbursement"
     other = "other"
+    # One person's document bundle, checked for contradictions between the
+    # documents (app/services/identity_documents.py) instead of for forgery.
+    identity_verification = "identity_verification"
+    hiring_verification = "hiring_verification"
+
+
+IDENTITY_CASE_TYPES = frozenset({CaseType.identity_verification, CaseType.hiring_verification})
+
+
+def is_identity_case_type(case_type: "CaseType | str | None") -> bool:
+    return case_type in IDENTITY_CASE_TYPES or case_type in {t.value for t in IDENTITY_CASE_TYPES}
 
 
 class Case(TenantScopedMixin, UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -103,11 +115,23 @@ class Case(TenantScopedMixin, UUIDPrimaryKeyMixin, TimestampMixin, Base):
         PG_UUID(as_uuid=True), ForeignKey("bulk_uploads.id"), nullable=True, index=True
     )
     reference_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Identity cases: which document a reviewer chose as the right one for a
+    # detail the documents dispute (app/services/person_profile.py).
+    # {field_name: {document_id, chosen_by_user_id, chosen_at}}
+    profile_overrides: Mapped[dict | None] = mapped_column(
+        JSONB().with_variant(JSON(), "sqlite"), nullable=True
+    )
+    # The family member this bundle belongs to (app/models/family.py), when
+    # the case was submitted for one.
+    family_member_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("family_members.id"), nullable=True, index=True
+    )
 
     submitted_by = relationship(
         "User", back_populates="submitted_cases", foreign_keys=[submitted_by_user_id]
     )
     documents = relationship("Document", back_populates="case")
+    family_member = relationship("FamilyMember", back_populates="cases")
     cross_document_findings = relationship("CrossDocumentFinding", back_populates="case")
     # Legacy stub table from the initial schema; superseded by
     # `risk_assessments` (case_risk_assessments) and no longer written.
