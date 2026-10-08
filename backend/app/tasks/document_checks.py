@@ -255,6 +255,12 @@ def run_cross_document_checks(case_id: str, company_id: str | None = None) -> No
     db = open_task_session(SessionLocal, company_uuid)
     try:
         case_uuid = uuid.UUID(case_id)
+        # One run per case at a time: every document that finishes asks for
+        # this check, so several can start together, and each would insert its
+        # own copy of the findings. The lock is held until this run commits.
+        db.execute(
+            select(Case.id).where(Case.id == case_uuid, Case.company_id == company_uuid).with_for_update()
+        ).first()
         documents = db.execute(
             select(Document).where(Document.case_id == case_uuid, Document.company_id == company_uuid)
         ).scalars().all()

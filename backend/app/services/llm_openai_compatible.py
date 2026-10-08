@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from datetime import datetime
 from typing import Any
 
@@ -155,6 +156,21 @@ def _normalise_identity(parsed: dict[str, Any]) -> dict[str, Any]:
     return parsed
 
 
+_RATE_LIMIT_ATTEMPTS = 6
+_MAX_WAIT_SECONDS = 60.0
+
+
+def _retry_after_seconds(exc: Exception, attempt: int) -> float:
+    """How long the service asked us to wait, else 5, 10, 20... seconds."""
+    headers = getattr(getattr(exc, "response", None), "headers", None) or {}
+    try:
+        wait = float(headers.get("retry-after"))
+    except (TypeError, ValueError):
+        found = re.search(r"try again in (?:(\d+)m)?([\d.]+)s", str(exc))
+        wait = (int(found.group(1) or 0) * 60 + float(found.group(2))) if found else 5.0 * 2 ** attempt
+    return min(max(wait, 1.0) + 0.5, _MAX_WAIT_SECONDS)
+
+
 class OpenAICompatibleLLMService(LLMService):
     def __init__(self, base_url: str | None, api_key: str | None, model: str | None, timeout_seconds: float):
         if not base_url or not model:
@@ -166,26 +182,37 @@ class OpenAICompatibleLLMService(LLMService):
 
         self._model = model
         # A local server such as Ollama needs no key; the client still wants a value.
-        self._client = OpenAI(base_url=base_url, api_key=api_key or "not-needed", timeout=timeout_seconds)
+        # Retries are handled here (see _chat_json), not by the client.
+        self._client = OpenAI(
+            base_url=base_url, api_key=api_key or "not-needed", timeout=timeout_seconds, max_retries=0
+        )
 
     def _chat_json(self, system_prompt: str, user_content: str, schema: dict[str, Any], max_tokens: int) -> dict[str, Any]:
-        from openai import APIError
+        from openai import APIError, RateLimitError
 
         messages = [
             {"role": "system", "content": system_prompt + _JSON_INSTRUCTION
              + json.dumps(_skeleton(schema), ensure_ascii=False, indent=1)},
             {"role": "user", "content": user_content},
         ]
-        try:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,
-                response_format={"type": "json_object"},
-                max_tokens=max_tokens,
-                temperature=0,
-            )
-        except APIError as exc:
-            raise LLMOperationError(f"LLM request failed: {exc}") from exc
+        for attempt in range(_RATE_LIMIT_ATTEMPTS):
+            try:
+                response = self._client.chat.completions.create(
+                    model=self._model,
+                    messages=messages,
+                    response_format={"type": "json_object"},
+                    max_tokens=max_tokens,
+                    temperature=0,
+                )
+                break
+            except RateLimitError as exc:
+                # Free tiers allow few requests a minute: wait as long as the
+                # service asks (or a growing pause) and try again.
+                if attempt == _RATE_LIMIT_ATTEMPTS - 1:
+                    raise LLMOperationError(f"LLM request failed: {exc}") from exc
+                time.sleep(_retry_after_seconds(exc, attempt))
+            except APIError as exc:
+                raise LLMOperationError(f"LLM request failed: {exc}") from exc
         content = (response.choices[0].message.content or "").strip()
         if content.startswith("```"):
             content = content.strip("`").removeprefix("json").strip()

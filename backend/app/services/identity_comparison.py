@@ -349,8 +349,10 @@ def compare_addresses(field_a: dict[str, Any], field_b: dict[str, Any]) -> Verdi
     tokens_a, tokens_b = _address_tokens(text_a), _address_tokens(text_b)
     if not tokens_a or not tokens_b:
         return None
-    plain_a = re.sub(r"\W+", " ", text_a.casefold()).split()
-    plain_b = re.sub(r"\W+", " ", text_b.casefold()).split()
+    # The postal code is compared above; printed inside one address and apart
+    # from the other, it is not a difference in the address itself.
+    plain_a = re.sub(r"\W+", " ", _POSTAL_CODE.sub(" ", text_a.casefold())).split()
+    plain_b = re.sub(r"\W+", " ", _POSTAL_CODE.sub(" ", text_b.casefold())).split()
     if plain_a == plain_b:
         return _harmless("transliteration") if cross_script else _MATCH
     same_meaning = _harmless("transliteration" if cross_script else "address_formatting")

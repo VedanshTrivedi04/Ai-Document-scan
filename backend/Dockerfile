@@ -17,6 +17,8 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY alembic.ini seed.py start-api.sh start-worker.sh start-beat.sh ./
+# A Windows checkout gives these scripts CRLF line endings, which sh rejects.
+RUN sed -i 's/\r$//' start-api.sh start-worker.sh start-beat.sh
 COPY app ./app
 
 EXPOSE 8000
