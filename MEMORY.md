@@ -592,3 +592,88 @@ providers. Steps are in `docs/TESTING_CHECKLIST.md` section 0 and
 4. Verify the frontend against `docs/TESTING_CHECKLIST.md` section 10.
 5. If time allows: block approval while findings are open; include identity
    findings in the exported report; localise dates in messages.
+
+---
+
+## 16. Public Citizen Self-Registration (added 9 October 2026)
+
+### Why it was added
+
+The Family Management and Identity Contradiction Detector features are built
+for ordinary citizens and job applicants — not for corporate employees tied
+to a company subdomain. Before this change, the only way to create an account
+was for a platform admin to log in and call `POST /settings/users`. A citizen
+visiting `http://localhost` (or any future public URL) had no way to register
+themselves.
+
+### What was built
+
+**Backend — `POST /auth/register`** (`app/api/auth.py`)
+
+- Public endpoint; no bearer token required.
+- Accepts `full_name`, `email`, `password` (8–128 chars).
+- Looks up the company whose `name` matches `settings.default_company_name`
+  (env var `DEFAULT_COMPANY_NAME`, default `"Default Company"`). This company
+  already exists: the Alembic multi-tenancy migration creates it from that
+  setting.
+- Creates a `User` row with `role = "user"` and `company_id` pointing at the
+  Default Company. The database CHECK constraint
+  `(role = 'platform_admin') = (company_id IS NULL)` is satisfied because the
+  new user is a company role with a non-NULL company.
+- Row-Level Security works unchanged: the user's company_id scopes every query
+  automatically.
+- Returns a `TokenResponse` (same shape as `/auth/login`) so the caller is
+  immediately logged in — no extra round-trip.
+- `company_subdomain` is always `None` in the response so the frontend does
+  NOT redirect the new user to an org subdomain.
+- Throttled via the existing `login_throttle.check` IP rate limiter (shares
+  the IP ceiling with login; uses the synthetic key `"__register__"` for the
+  per-email slot so it never collides with a real email).
+- Audit event `user_self_registered` is recorded.
+
+**New schema** (`app/schemas/auth.py`) — `RegisterRequest` model.
+
+**Frontend — `api/auth.ts`**
+
+- New `RegisterPayload` interface and `register()` function calling
+  `POST /auth/register`.
+
+**Frontend — `hooks/useAuth.tsx`**
+
+- `register` callback added (parallel to `login`). Both share a private
+  `_storeToken` helper that writes to `localStorage` and sets the React state.
+- `AuthContextValue` and the provider's `useMemo` value updated accordingly.
+
+**Frontend — `pages/LoginPage.tsx`** (full rewrite of the file)
+
+- Sign In / Sign Up **tab switcher** added (shown only when `isOrgSite` is
+  false, i.e. on `localhost` and any public URL without an org subdomain).
+  On an organisation's subdomain only the Sign In form is shown — citizens
+  on a company portal must be created by a company admin.
+- Sign Up form: Full Name, Email, Password, Confirm Password with Zod
+  validation (password ≥ 8 chars, passwords must match).
+- After successful registration the user is navigated to `/family` — the
+  citizen's primary destination.
+- "New here? Create a free account" link on the Sign In form and "Already
+  have an account? Sign in" link on the Sign Up form cross-navigate the tabs.
+- No breaking changes to the existing Sign In form (same fields, same IDs,
+  same redirect logic for org subdomain users).
+
+### What did NOT change
+
+- No new migration. The Default Company and the database constraint were
+  already there.
+- Invoice cases, reviewer workflows, platform-admin screens — unaffected.
+- RLS isolation is unchanged. Self-registered citizens see only the Default
+  Company's data, and only their own cases (company-level RLS + the
+  `submitted_by_user_id` filter in the cases API).
+- The platform admin can still create users by hand as before.
+
+### Important constraints carried forward
+
+- The Default Company must exist and be active. If a platform admin deletes
+  or suspends it, `/auth/register` returns 503 with a user-readable message.
+- Self-registered users cannot change their own company. They are permanently
+  in the Default Company unless a platform admin moves them.
+- Password reset is still done by a platform admin (no email-based reset was
+  added). This is a known limitation.

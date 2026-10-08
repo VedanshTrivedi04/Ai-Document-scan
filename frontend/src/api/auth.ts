@@ -13,6 +13,21 @@ export function login(payload: LoginPayload): Promise<TokenResponse> {
   })
 }
 
+export interface RegisterPayload {
+  full_name: string
+  email: string
+  password: string
+}
+
+// Public citizen self-registration — no token needed.
+// On success returns a ready-to-use bearer token (user is logged in immediately).
+export function register(payload: RegisterPayload): Promise<TokenResponse> {
+  return apiFetch<TokenResponse>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
 export interface ChangePasswordPayload {
   current_password: string
   new_password: string

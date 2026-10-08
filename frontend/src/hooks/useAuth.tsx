@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { getMe, login as loginRequest, type LoginPayload } from "@/api/auth"
+import { getMe, login as loginRequest, register as registerRequest, type LoginPayload, type RegisterPayload } from "@/api/auth"
 import type { CurrentUser, TokenResponse } from "@/types/auth"
 
 const TOKEN_STORAGE_KEY = "docauth.token"
@@ -11,6 +11,7 @@ interface AuthContextValue {
   user: CurrentUser | undefined
   isLoadingUser: boolean
   login: (payload: LoginPayload) => Promise<TokenResponse>
+  register: (payload: RegisterPayload) => Promise<TokenResponse>
   logout: () => void
 }
 
@@ -54,14 +55,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("auth:unauthorized", handleUnauthorized)
   }, [queryClient])
 
+  const _storeToken = React.useCallback((resp: TokenResponse) => {
+    localStorage.setItem(TOKEN_STORAGE_KEY, resp.access_token)
+    setToken(resp.access_token)
+    return resp
+  }, [])
+
   const login = React.useCallback(
     async (payload: LoginPayload): Promise<TokenResponse> => {
       const resp = await loginRequest(payload)
-      localStorage.setItem(TOKEN_STORAGE_KEY, resp.access_token)
-      setToken(resp.access_token)
-      return resp
+      return _storeToken(resp)
     },
-    []
+    [_storeToken]
+  )
+
+  const register = React.useCallback(
+    async (payload: RegisterPayload): Promise<TokenResponse> => {
+      const resp = await registerRequest(payload)
+      return _storeToken(resp)
+    },
+    [_storeToken]
   )
 
   const logout = React.useCallback(() => {
@@ -71,8 +84,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient])
 
   const value = React.useMemo(
-    () => ({ token, user, isLoadingUser: Boolean(token) && isLoadingUser, login, logout }),
-    [token, user, isLoadingUser, login, logout]
+    () => ({ token, user, isLoadingUser: Boolean(token) && isLoadingUser, login, register, logout }),
+    [token, user, isLoadingUser, login, register, logout]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

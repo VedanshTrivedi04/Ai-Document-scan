@@ -11,6 +11,17 @@ class LoginRequest(BaseModel):
     password: str = Field(description="Account password.")
 
 
+class RegisterRequest(BaseModel):
+    full_name: str = Field(
+        min_length=1, max_length=255, description="Your display name."
+    )
+    email: EmailStr = Field(description="Email address — must be unique across the platform.")
+    password: str = Field(
+        min_length=8, max_length=128,
+        description="Password (8–128 characters). Stored hashed; never logged."
+    )
+
+
 class TokenResponse(BaseModel):
     access_token: str = Field(description="JWT. Send as `Authorization: Bearer <token>`.")
     token_type: str = Field(default="bearer", description="Always `bearer`.")

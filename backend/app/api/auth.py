@@ -29,6 +29,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
 from app.db import tenancy
 from app.db.session import get_db, get_system_db
@@ -38,6 +39,7 @@ from app.schemas.auth import (
     ChangePasswordRequest,
     CurrentUserResponse,
     LoginRequest,
+    RegisterRequest,
     TokenResponse,
     UploadLimitsResponse,
 )
@@ -252,6 +254,114 @@ def login(
     login_throttle.record_success(email)
     access_token = create_access_token(subject=str(user.id), extra_claims=token_claims(user))
     return TokenResponse(access_token=access_token, company_subdomain=company_subdomain)
+
+
+# ---------------------------------------------------------------------------
+# Public citizen self-registration
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=201,
+    summary="Create a citizen account (public)",
+    description=(
+        "Lets any visitor create their own account without admin involvement. "
+        "The new account is placed in the Default Company (DEFAULT_COMPANY_NAME) "
+        "with the `user` role — exactly the same as a platform admin creating an "
+        "account there by hand. The response carries a ready-to-use bearer token "
+        "so the caller is logged in immediately after registration. "
+        "Rate-limited per IP (LOGIN_MAX_ATTEMPTS_PER_IP_PER_MINUTE). "
+        "Returns 409 when the email is already taken, 503 when the Default "
+        "Company does not exist (a platform admin removed it)."
+    ),
+    responses={
+        409: {"description": "An account with that email already exists."},
+        422: {"description": "Validation error (e.g. password shorter than 8 chars)."},
+        429: {"description": "Too many requests from this IP."},
+        503: {"description": "The Default Company does not exist — contact the platform admin."},
+    },
+)
+def register(
+    payload: RegisterRequest,
+    request: Request,
+    system_db: Session = Depends(get_system_db),
+) -> TokenResponse:
+    """Self-register a citizen. No authentication required."""
+    from sqlalchemy.exc import IntegrityError
+
+    # Reuse IP throttle so bots cannot spam account creation either.
+    ip = request.client.host if request.client else None
+    blocked = login_throttle.check("__register__", ip)
+    if blocked is not None:
+        minutes = max(1, -(-blocked.retry_after_seconds // 60))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many requests. Try again in {minutes} minute{'s' if minutes != 1 else ''}.",
+            headers={"Retry-After": str(blocked.retry_after_seconds)},
+        )
+
+    # Resolve the Default Company — where public citizens live.
+    default_company = system_db.execute(
+        select(Company).where(Company.name == settings.default_company_name, Company.is_active.is_(True))
+    ).scalar_one_or_none()
+    if default_company is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "The public registration portal is not available right now. "
+                "Please contact the platform administrator."
+            ),
+        )
+
+    email = str(payload.email).strip()
+
+    # Duplicate-email check (fast path before the write).
+    existing = system_db.execute(
+        select(User.id).where(func.lower(User.email) == email.lower()).limit(1)
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with that email already exists. Please sign in instead.",
+        )
+
+    user = User(
+        email=email,
+        full_name=payload.full_name.strip(),
+        role=UserRole.user,
+        company_id=default_company.id,
+        hashed_password=hash_password(payload.password),
+        is_active=True,
+    )
+    system_db.add(user)
+    try:
+        system_db.flush()
+    except IntegrityError:
+        system_db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with that email already exists. Please sign in instead.",
+        )
+
+    record_event(
+        system_db,
+        "user_self_registered",
+        actor_user_id=user.id,
+        company_id=user.company_id,
+        event_data={
+            "user_id": str(user.id),
+            "email": user.email,
+            "company_id": str(user.company_id),
+            "company_name": default_company.name,
+        },
+    )
+    system_db.commit()
+    system_db.refresh(user)
+
+    access_token = create_access_token(subject=str(user.id), extra_claims=token_claims(user))
+    # company_subdomain is intentionally None for the public portal — no redirect.
+    return TokenResponse(access_token=access_token, company_subdomain=None)
 
 
 @router.get(
