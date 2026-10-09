@@ -1,0 +1,131 @@
+[
+  {
+    "id": "T01-clean",
+    "title": "Every shared detail agrees",
+    "expected": "No findings",
+    "documents": [
+      "T01-clean/aadhaar.png",
+      "T01-clean/pan.png"
+    ]
+  },
+  {
+    "id": "T02-initial-and-year",
+    "title": "Extra initial in the name; birth year differs by one",
+    "expected": "Name: not predicted with confidence (harmless extra initial or low partial-name; record which). DOB: conflict, year difference (high)",
+    "documents": [
+      "T02-initial-and-year/aadhaar.png",
+      "T02-initial-and-year/pan.png"
+    ]
+  },
+  {
+    "id": "T03-dob-day-month-swapped",
+    "title": "Day and month swapped",
+    "expected": "DOB: conflict, low severity",
+    "documents": [
+      "T03-dob-day-month-swapped/aadhaar.png",
+      "T03-dob-day-month-swapped/pan.png"
+    ]
+  },
+  {
+    "id": "T04-dob-one-digit",
+    "title": "One digit of the day differs",
+    "expected": "DOB: conflict, date_minor_difference (medium)",
+    "documents": [
+      "T04-dob-one-digit/aadhaar.png",
+      "T04-dob-one-digit/pan.png"
+    ]
+  },
+  {
+    "id": "T05-dob-15-years",
+    "title": "Birth year 15 years apart",
+    "expected": "DOB: conflict, date_year_difference (high)",
+    "documents": [
+      "T05-dob-15-years/aadhaar.png",
+      "T05-dob-15-years/pan.png"
+    ]
+  },
+  {
+    "id": "T06-honorific-capitals",
+    "title": "Capital letters and a title on one card",
+    "expected": "No conflict; name harmless (honorific / case)",
+    "documents": [
+      "T06-honorific-capitals/aadhaar.png",
+      "T06-honorific-capitals/pan.png"
+    ]
+  },
+  {
+    "id": "T07-spelling-variant",
+    "title": "Same sound, different spelling",
+    "expected": "Name and parent: harmless spelling_variant",
+    "documents": [
+      "T07-spelling-variant/aadhaar.png",
+      "T07-spelling-variant/pan.png"
+    ]
+  },
+  {
+    "id": "T08-different-person",
+    "title": "A card of someone else",
+    "expected": "Name and parent: conflict, different_name (critical)",
+    "documents": [
+      "T08-different-person/aadhaar.png",
+      "T08-different-person/pan.png"
+    ]
+  },
+  {
+    "id": "T09-similar-name",
+    "title": "High similarity, different person",
+    "expected": "Name: conflict, different_name (critical). Must NOT be harmless",
+    "documents": [
+      "T09-similar-name/aadhaar.png",
+      "T09-similar-name/pan.png"
+    ]
+  },
+  {
+    "id": "T10-gender-mismatch",
+    "title": "Two ID cards, gender differs",
+    "expected": "Gender: conflict, gender_difference (high)",
+    "documents": [
+      "T10-gender-mismatch/aadhaar.png",
+      "T10-gender-mismatch/aadhaar-second.png"
+    ]
+  },
+  {
+    "id": "T11-income-gap",
+    "title": "Income 60,000 against 4,80,000 (lakh notation)",
+    "expected": "Income: conflict, income_difference (critical)",
+    "documents": [
+      "T11-income-gap/income-low.png",
+      "T11-income-gap/income-high.png"
+    ]
+  },
+  {
+    "id": "T12-masked-id-address-format",
+    "title": "Masked ID against full ID; abbreviated address",
+    "expected": "No conflict on ID (masked positions agree); address harmless formatting",
+    "documents": [
+      "T12-masked-id-address-format/aadhaar.png",
+      "T12-masked-id-address-format/aadhaar-second.png"
+    ]
+  },
+  {
+    "id": "T13-hindi-vs-english",
+    "title": "Hindi card against English card",
+    "expected": "Name and parent: harmless transliteration",
+    "documents": [
+      "T13-hindi-vs-english/aadhaar-hindi.png",
+      "T13-hindi-vs-english/pan.png"
+    ]
+  },
+  {
+    "id": "T14-scan-quality",
+    "title": "One card, five image conditions",
+    "expected": "NOT DEFINED: upload each alone and record which fields are read. Same values as T01 Aadhaar expected where readable",
+    "documents": [
+      "T14-scan-quality/clean.png",
+      "T14-scan-quality/rotated-5deg.png",
+      "T14-scan-quality/blurred.png",
+      "T14-scan-quality/low-resolution.png",
+      "T14-scan-quality/jpeg-heavy-compression.jpg"
+    ]
+  }
+]
