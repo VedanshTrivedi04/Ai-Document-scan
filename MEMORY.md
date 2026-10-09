@@ -1634,4 +1634,35 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 **Git**
 - Branch: `feat/telegram-chatbot`
 - Base: `323e4c2` (main)
-- Push: Pending force push with lease
+- Push: Successful (origin/feat/telegram-chatbot)
+
+---
+
+### 2026-10-09 16:05
+
+**User Request**
+> "@[TerminalName: powershell, ProcessId: 23556] kya huav" (Docker container unhealthy and pull from main)
+
+**Exploration**
+- Investigated Terminal 23556 where `docker compose up --watch` failed:
+  - User ran `git pull origin main` which pulled commit `eb21030` and `d5b7aa7` (`d9e1f3a5b7c2_identity_contradiction_rules.py` migration and face models).
+  - The local Docker image `fddt-backend:local` was built prior to the pull and lacked the new migration files and `IDENTITY_RULES` in `risk_rule_seed.py`.
+  - When `docauth-backend` started, `alembic upgrade head` failed inside the container, causing Docker to mark `docauth-backend` as `unhealthy` and exit.
+
+**Work Done**
+- Executed `docker compose build backend` to rebuild `fddt-backend:local` with all new code, dependencies, and ONNX face detection models.
+- Started stack via `docker compose up -d`:
+  - `docauth-backend` migrated cleanly and became `healthy` on port 8000.
+  - `docauth-frontend` started successfully on port 80.
+  - All workers (`vision`, `extraction`, `forensics`, `beat`) and Redis became healthy and active.
+- Integrated latest `main` commit (`eb21030`) cleanly into `feat/telegram-chatbot`.
+- Resolved minor conflict in `.gitignore` preserving `backend/models/`, `backend/tessdata/`, and `*.onnx`.
+
+**Verification**
+- `docker ps`: All 7 containers running and healthy.
+- `git status`: Working tree clean, branch synchronized with GitHub.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Commit: `9744619` (`merge: integrate latest main into feat/telegram-chatbot`)
+- Push: Successful (`origin/feat/telegram-chatbot`)
