@@ -21,7 +21,12 @@ from telegram.ext import (
 )
 
 from config import TELEGRAM_BOT_TOKEN, TEMP_DIR
-from verification_client import verify_documents, verify_bundle_by_id
+from verification_client import (
+    verify_documents,
+    verify_bundle_by_id,
+    extract_document_fields,
+    get_document_preview_summary,
+)
 from explainer import format_citizen_report
 
 # Enable logging
@@ -78,14 +83,16 @@ async def demo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     result = verify_bundle_by_id(bundle_id)
     if not result:
         await update.message.reply_text(
-            f"❌ Bundle '{bundle_id}' nahi mila.\n"
-            "Uplabdh Test Bundles:\n"
-            "• `/demo B01` (All Clean / Match)\n"
-            "• `/demo B02` (Spelling & Address variants)\n"
-            "• `/demo B05` (Hindi Transliteration)\n"
-            "• `/demo B07` (DOB Year Conflict)\n"
-            "• `/demo B10` (Income 8x Conflict)\n"
-            "• `/demo H01` (Hiring Candidate)",
+            f"❌ Bundle ya Test Card '{bundle_id}' nahi mila.\n\n"
+            "📋 *Uplabdh Test Sets:*\n"
+            "• `/demo T01` (Aadhaar + PAN: All Clean)\n"
+            "• `/demo T02` (Aadhaar + PAN: Initial & Year Diff)\n"
+            "• `/demo T05` (Aadhaar + PAN: 15-Year DOB Conflict)\n"
+            "• `/demo T07` (Aadhaar + PAN: Spelling Variants)\n"
+            "• `/demo T11` (Income Certificates: 8x Gap)\n"
+            "• `/demo B01` (PDF Bundle: All Agree)\n"
+            "• `/demo B07` (PDF Bundle: DOB Year Mismatch)\n"
+            "• `/demo B10` (PDF Bundle: Income Gap)",
             parse_mode=ParseMode.MARKDOWN
         )
         return
@@ -134,10 +141,23 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
     doc_paths = context.user_data.get("doc_paths", [])
     count = len(doc_paths)
 
+    # Phase 1: Real Live Extraction Preview for Citizen
+    extracted_previews = []
+    for idx, path in enumerate(doc_paths):
+        try:
+            bdoc = extract_document_fields(path, idx + 1)
+            extracted_previews.append(get_document_preview_summary(bdoc, idx + 1))
+        except Exception as e:
+            logger.error(f"Error extracting preview for doc {idx+1}: {e}")
+            extracted_previews.append(f"📄 *Dastavej {idx+1}:* Prapt hua")
+
+    docs_preview_text = "\n\n".join(extracted_previews)
+
     if count >= MAX_DOCS:
         await update.message.reply_text(
-            f"✅ *Sabhi {MAX_DOCS} dastavej prapt ho gaye!*\n"
-            "Jaanch shuru ki ja rahi hai...",
+            f"✅ *Sabhi {MAX_DOCS} dastavej prapt aur scan ho gaye!*\n\n"
+            f"{docs_preview_text}\n\n"
+            "⏳ *Cross-document contradiction jaanch shuru ki ja rahi hai...*",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=ReplyKeyboardRemove(),
         )
@@ -148,15 +168,19 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
         keyboard = [[VERIFY_BUTTON_TEXT]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         msg = (
-            f"✅ *Kul {count} Dastavej Prapt Ho Gaye!*\n\n"
-            f"📊 Bundle Progress: *{count}/{MAX_DOCS} documents*\n\n"
+            f"✅ *Kul {count} Dastavej Prapt Aur Scan Ho Gaye!*\n\n"
+            f"{docs_preview_text}\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 Bundle: *{count}/{MAX_DOCS} documents*\n\n"
             "👉 Aap chahein toh aur bhi documents bhej sakte hain,\n"
-            f"YA neeche diye gaye *'{VERIFY_BUTTON_TEXT}'* button par click karke abhi jaanch shuru kar sakte hain!"
+            f"YA neeche diye gaye *'{VERIFY_BUTTON_TEXT}'* button par click karke abhi aapas me jaanch shuru karein!"
         )
     else:
         reply_markup = ReplyKeyboardRemove()
         msg = (
-            f"✅ *Pehla Dastavej Prapt Ho Gaya!*\n\n"
+            f"✅ *Pehla Dastavej Prapt Aur Scan Ho Gaya!*\n\n"
+            f"{docs_preview_text}\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
             "📄 Kripya doosra dastavej (jaise PAN Card ya Income Certificate) bhejiye "
             "taaki cross-verification kiya ja sake."
         )
