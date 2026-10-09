@@ -2088,7 +2088,9 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Status: Staged and committed.
+- Commit: `1bdee6e` (`feat: add risk scoring, risk tier, and severity badges to verification report`)
+- Push: Successful (`origin/feat/telegram-chatbot`)
+- Status: Complete
 
 
 
