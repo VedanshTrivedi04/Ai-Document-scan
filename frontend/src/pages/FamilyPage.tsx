@@ -59,7 +59,7 @@ export function FamilyPage() {
 
   const [currentLang, setCurrentLang] = React.useState<string>(() => {
     try {
-      return localStorage.getItem("agnitia_lang") || "en"
+      return localStorage.getItem("docsure_lang") || "en"
     } catch {
       return "en"
     }
@@ -67,7 +67,7 @@ export function FamilyPage() {
 
   React.useEffect(() => {
     try {
-      localStorage.setItem("agnitia_lang", currentLang)
+      localStorage.setItem("docsure_lang", currentLang)
     } catch {
       // ignore
     }

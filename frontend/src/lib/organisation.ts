@@ -1,8 +1,8 @@
 /**
  * Organisation / subdomain routing helpers.
  *
- * The platform runs at a root domain (e.g. agnitia.com) and each
- * organisation has its own subdomain (e.g. acme.agnitia.com).
+ * The platform runs at a root domain (e.g. docsure.com) and each
+ * organisation has its own subdomain (e.g. acme.docsure.com).
  * These utilities help detect and construct those URLs.
  */
 
@@ -25,8 +25,8 @@ export function getOrgSubdomain(): string | null {
   const hostname = window.location.hostname
   const parts = hostname.split(".")
 
-  // e.g. acme.agnitia.com → ["acme", "agnitia", "com"] → "acme"
-  // e.g. agnitia.com or localhost → no subdomain
+  // e.g. acme.docsure.com → ["acme", "docsure", "com"] → "acme"
+  // e.g. docsure.com or localhost → no subdomain
   if (parts.length >= 3 && parts[0] !== "www") {
     return parts[0]
   }
@@ -35,8 +35,8 @@ export function getOrgSubdomain(): string | null {
 
 /**
  * Returns the base domain (without any subdomain prefix).
- * e.g. "acme.agnitia.com" → "agnitia.com"
- *      "agnitia.com"       → "agnitia.com"
+ * e.g. "acme.docsure.com" → "docsure.com"
+ *      "docsure.com"       → "docsure.com"
  *      "localhost"         → "localhost"
  */
 export function getBaseDomain(): string {

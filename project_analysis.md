@@ -1,4 +1,4 @@
-# 🔍 Agnitiaa Project — Complete Analysis
+# 🔍 DocSure Project — Complete Analysis
 
 ---
 
@@ -198,14 +198,14 @@ User uploads PDF
 ### ✅ JO PEHLE SE IMPLEMENT HAI (Bahut Strong)
 
 #### 1. OCR Pipeline — ✅ FULLY DONE
-- **File:** [`ocr_service.py`](file:///c:/agnitiaa/Ai-Document-scan/backend/app/services/ocr_service.py)
+- **File:** [`ocr_service.py`](file:///c:/DocSure/Ai-Document-scan/backend/app/services/ocr_service.py)
 - Azure Document Intelligence use hota hai
 - PDFs aur images dono support karta hai
 - Word-level bounding boxes save hote hain (highlighting ke liye)
 - Arabic text bhi handle karta hai
 
 #### 2. LLM-Based Field Extraction — ✅ FULLY DONE
-- **File:** [`llm_service.py`](file:///c:/agnitiaa/Ai-Document-scan/backend/app/services/llm_service.py)
+- **File:** [`llm_service.py`](file:///c:/DocSure/Ai-Document-scan/backend/app/services/llm_service.py)
 - Azure OpenAI (GPT) se document type classify karta hai
 - Core fields extract karta hai: `issuer`, `date`, `amount`, `reference_number`
 - Amounts → float normalize, Dates → ISO 8601 normalize
@@ -213,7 +213,7 @@ User uploads PDF
 - Confidence per field — low confidence pe manual review route hota hai
 
 #### 3. Cross-Document Contradiction Detection — ✅ DONE
-- **File:** [`cross_document_service.py`](file:///c:/agnitiaa/Ai-Document-scan/backend/app/services/cross_document_service.py)
+- **File:** [`cross_document_service.py`](file:///c:/DocSure/Ai-Document-scan/backend/app/services/cross_document_service.py)
 - Amount, Date, Issuer compare karta hai across all documents in a case
 - **Fuzzy matching** se spelling differences ignore karta hai (rapidfuzz library)
 - Severity assign karta hai: `amount` mismatch = **HIGH**, baaki = medium/low
@@ -221,7 +221,7 @@ User uploads PDF
 - **Model:** `CrossDocumentFinding` table mein store hota hai
 
 #### 4. Reviewer Screen — ✅ FULLY DONE
-- **File:** [`CaseDetailPage.tsx`](file:///c:/agnitiaa/Ai-Document-scan/frontend/src/pages/CaseDetailPage.tsx)
+- **File:** [`CaseDetailPage.tsx`](file:///c:/DocSure/Ai-Document-scan/frontend/src/pages/CaseDetailPage.tsx)
 - Document viewer with overlay highlights
 - Findings list with severity
 - Approve / Reject / Escalate buttons
@@ -229,19 +229,19 @@ User uploads PDF
 - PDF export
 
 #### 5. Field-Level Validation — ✅ VERY DETAILED
-- **File:** [`field_validation_service.py`](file:///c:/agnitiaa/Ai-Document-scan/backend/app/services/field_validation_service.py)
+- **File:** [`field_validation_service.py`](file:///c:/DocSure/Ai-Document-scan/backend/app/services/field_validation_service.py)
 - 15+ sub-checks: date in future, amount arithmetic, IBAN validation, etc.
 - Per-field bounding box locations (highlighting ke liye)
 
 #### 6. Risk Scoring Engine — ✅ DONE
-- **File:** [`risk_scoring_service.py`](file:///c:/agnitiaa/Ai-Document-scan/backend/app/services/risk_scoring_service.py)
+- **File:** [`risk_scoring_service.py`](file:///c:/DocSure/Ai-Document-scan/backend/app/services/risk_scoring_service.py)
 - Weighted rules engine (not a black-box AI model)
 - Configurable rules (admin UI se tune kar sakte ho)
 - 0-100 score + Low/Medium/High tier
 - Explainable: kaunse rules fire hue
 
 #### 7. PDF Forensics — ✅ VERY COMPREHENSIVE
-- **Files:** [`forensics/`](file:///c:/agnitiaa/Ai-Document-scan/backend/app/services/forensics/) directory
+- **Files:** [`forensics/`](file:///c:/DocSure/Ai-Document-scan/backend/app/services/forensics/) directory
 - ELA (Error Level Analysis) — pixel tampering
 - Copy-Move detection — copy-paste manipulation
 - Metadata forensics — PDF creation date tampering
@@ -250,12 +250,12 @@ User uploads PDF
 - Duplicate detection — same doc submitted before
 
 #### 8. Issuer Verification with Fuzzy + LLM — ✅ DONE
-- **File:** [`issuer_service.py`](file:///c:/agnitiaa/Ai-Document-scan/backend/app/services/issuer_service.py)
+- **File:** [`issuer_service.py`](file:///c:/DocSure/Ai-Document-scan/backend/app/services/issuer_service.py)
 - rapidfuzz se fuzzy string matching
 - Cross-script matching (Arabic naam vs English registry) → LLM fallback
 
 #### 9. Exact Conflict Location (Bounding Boxes) — ✅ DONE
-- **File:** [`field_locator_service.py`](file:///c:/agnitiaa/Ai-Document-scan/backend/app/services/field_locator_service.py)
+- **File:** [`field_locator_service.py`](file:///c:/DocSure/Ai-Document-scan/backend/app/services/field_locator_service.py)
 - Har field ka exact position page pe store hota hai
 - PDF viewer pe highlighted overlay dikhti hai (color-coded by type)
 
