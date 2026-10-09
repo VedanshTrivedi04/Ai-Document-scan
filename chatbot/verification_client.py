@@ -373,9 +373,55 @@ def extract_document_fields(file_path: Path, doc_index: int = 1) -> BundleDocume
                     logger.info(f"Matched {file_path.name} by catalog name {rel_path}")
                     return _build_bundle_document(file_path, doc_index, data)
 
-    # 3. Custom / User Document Extraction
+    # 3. Website's Primary Pipeline: Local OCR (PyMuPDF) + Groq (extract_identity)
+    local_data = _extract_via_local_ocr_and_groq(file_path, file_bytes)
+    if local_data and (local_data.get("full_name") or local_data.get("id_number")):
+        logger.info(f"Local OCR + Groq extracted real data for {file_path.name}: {local_data.get('full_name')}")
+        return _build_bundle_document(file_path, doc_index, local_data)
+
+    # 4. Fallback for Camera Photos / Scanned Images: Vision Pipeline
     extracted_data = _extract_via_vision_or_heuristics(file_path, file_bytes, doc_index)
     return _build_bundle_document(file_path, doc_index, extracted_data)
+
+
+def _extract_via_local_ocr_and_groq(file_path: Path, file_bytes: bytes) -> Dict[str, Any] | None:
+    """
+    Directly reuses the website's Local OCR (PyMuPDF) + Groq (extract_identity) pipeline
+    from backend/app/tasks/document_processing.py and backend/app/services/identity_documents.py.
+    """
+    try:
+        import pymupdf
+        ext = file_path.suffix.lstrip(".").lower() or "pdf"
+        doc = pymupdf.open(stream=file_bytes, filetype=ext)
+        text_lines = []
+        for page in doc:
+            t = page.get_text()
+            if t and t.strip():
+                text_lines.append(t.strip())
+        doc.close()
+
+        full_text = "\n".join(text_lines).strip()
+        if len(full_text.split()) >= 3:
+            try:
+                from app.services.llm_service import get_llm_service
+                from app.services.identity_documents import IDENTITY_DOCUMENT_TYPE_LABELS
+                llm = get_llm_service()
+                analysis = llm.extract_identity(full_text, IDENTITY_DOCUMENT_TYPE_LABELS)
+                return {
+                    "document_type": _normalize_extracted_doc_type(analysis.document_type, file_path.name),
+                    "full_name": analysis.full_name.value if analysis.full_name else None,
+                    "parent_or_spouse_name": analysis.parent_or_spouse_name.value if analysis.parent_or_spouse_name else None,
+                    "date_of_birth": analysis.date_of_birth.value if analysis.date_of_birth else None,
+                    "gender": analysis.gender.value if analysis.gender else None,
+                    "id_number": analysis.id_number.value if analysis.id_number else None,
+                    "address": analysis.address.value if analysis.address else None,
+                    "annual_income": analysis.annual_income.value if analysis.annual_income else None,
+                }
+            except Exception as e:
+                logger.warning(f"Groq extract_identity failed on Local OCR text: {e}")
+    except Exception as e:
+        logger.debug(f"Local OCR text extraction skipped for {file_path.name}: {e}")
+    return None
 
 
 def _build_bundle_document(file_path: Path, doc_index: int, data: Dict[str, Any]) -> BundleDocument:

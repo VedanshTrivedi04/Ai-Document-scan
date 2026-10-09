@@ -1607,5 +1607,5 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Commit: Pending
-- Push: Pending
+- Commit: d30ba91 (fix: implement resilient multi-model vision cascade and pdf support)
+- Push: Successful (origin/feat/telegram-chatbot)
