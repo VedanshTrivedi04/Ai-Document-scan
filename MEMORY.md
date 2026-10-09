@@ -1457,8 +1457,8 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Commit: Pending staging and commit.
-- Push: Pending.
+- Commit: `34e1676` (`feat: purge mock fallbacks, connect live Vision and instant cross-document contradiction checks`)
+- Push: Successful (`origin/feat/telegram-chatbot`)
 
 
 
