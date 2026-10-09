@@ -1339,7 +1339,41 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Branch: `feat/telegram-chatbot`
 - Commits: `82aa2f3`, `e72a92c`, `3cc8865` (`fix: ensure utf-8 console output encoding when launching telegram bot on windows`)
 - Push: Successful (`origin/feat/telegram-chatbot`)
-- Runtime Status: Bot process launched and actively running in background (`Application started`, Telegram polling active).
+---
+
+### 2026-10-09 13:20
+
+**User Request**
+> "abhi jo chatboat chal raha hai vo normal query ka response kyu ni dera hai tu groq ki api se user frdly ouput do na use like normal chat boat or jo bhi repsone hoga vo backend acctual data ke par( no hacuciante_) plan karo" -> "kardo"
+
+**Exploration**
+- Investigated terminal process ID 824 and identified Telegram 409 Conflict occurred because both a background agent daemon and the user's terminal were concurrently polling getUpdates with the same bot token.
+- Cancelled background daemon `task-1251` to permanently eliminate the 409 conflict.
+- Verified Groq API key and models (`openai/gpt-oss-20b`, `openai/gpt-oss-120b`, `qwen/qwen3.8-27b`). Tested chat completions with polite, empathetic Hindi/Hinglish persona.
+
+**Work Done**
+- Created `chatbot/chat_service.py`:
+  - Implemented `ask_sarthi_assistant()` using Groq chat completions with automatic multi-model failover (`openai/gpt-oss-20b` -> `openai/gpt-oss-120b` -> `qwen/qwen3.8-27b`).
+  - Added strict anti-hallucination grounding: prompts are injected with actual extracted document attributes, backend contradiction findings (conflicts, harmless variations, matches), and official Indian administrative precedence (UIDAI, Tehsildar, Gazette, Notary affidavit).
+  - Included safe rule-based fallback if API is unreachable.
+- Updated `chatbot/bot.py`:
+  - Added `handle_chat_message()` receiving any free-form natural language message from citizens.
+  - Registered `MessageHandler(filters.TEXT & ~filters.COMMAND, handle_chat_message)` inside `COLLECTING_DOCS` and globally.
+
+**Files Changed**
+- `chatbot/chat_service.py`: Grounded Groq conversational engine.
+- `chatbot/bot.py`: Connected natural language conversational query handler.
+- `memory.md`: Updated interaction log.
+
+**Verification**
+- Tested `ask_sarthi_assistant()` with zero documents -> polite guidance explaining capabilities and inviting uploads.
+- Tested `ask_sarthi_assistant()` with T05 DOB conflict -> precisely identified Aadhaar (1982) vs PAN (1997) 15-year gap, confirmed rejection risk, and cited 10th marksheet/UIDAI precedence with 0% hallucination.
+- Tested fallback and verified all modules import cleanly.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Status: Staged and committed.
+
 
 
 

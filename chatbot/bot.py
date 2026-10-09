@@ -45,6 +45,7 @@ from explainer import (
     format_scheme_eligibility,
     format_verified_profile,
 )
+from chat_service import ask_sarthi_assistant
 
 # Enable logging
 logging.basicConfig(
@@ -365,6 +366,41 @@ async def _save_incoming_media(update: Update, context: ContextTypes.DEFAULT_TYP
     await file_obj.download_to_drive(custom_path=save_path)
     return save_path
 
+async def handle_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles natural language conversational queries using Groq LLM (Grounded, No Hallucination)."""
+    text = update.message.text
+    if not text or text.strip().startswith("/"):
+        return
+
+    # Check if verify button was clicked
+    if text.strip() == VERIFY_BUTTON_TEXT:
+        await handle_verify_request(update, context)
+        return
+
+    # Send typing feedback
+    try:
+        await update.message.chat.send_action("typing")
+    except Exception:
+        pass
+
+    session_context = {
+        "doc_paths": context.user_data.get("doc_paths", []),
+        "extracted_docs": context.user_data.get("extracted_docs", []),
+        "last_result": context.user_data.get("last_result", {}),
+        "quality_warnings": context.user_data.get("quality_warnings", []),
+    }
+
+    try:
+        reply = await ask_sarthi_assistant(text, session_context)
+        await update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        logger.error(f"Error handling chat message: {e}", exc_info=True)
+        # Fallback without markdown parsing in case of special formatting
+        try:
+            await update.message.reply_text(reply)
+        except Exception:
+            await update.message.reply_text("Kripya apna sawal dobara poochein ya `/help` dekhein.")
+
 def main():
     """Starts the Sarthi Telegram Bot."""
     if not TELEGRAM_BOT_TOKEN:
@@ -389,6 +425,7 @@ def main():
                 MessageHandler(filters.Regex(f"^{VERIFY_BUTTON_TEXT}$"), handle_verify_request),
                 CommandHandler("done", handle_verify_request),
                 MessageHandler(filters.PHOTO | filters.Document.ALL, handle_document_upload),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_chat_message),
             ],
         },
         fallbacks=[
@@ -402,6 +439,7 @@ def main():
     app.add_handler(CommandHandler("scheme", scheme_command))
     app.add_handler(CommandHandler("profile", profile_command))
     app.add_handler(conv_handler)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_chat_message))
 
     print("✅ Bot is online and directly connected to backend engine!")
     app.run_polling()
