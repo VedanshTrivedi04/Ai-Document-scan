@@ -1666,3 +1666,55 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Branch: `feat/telegram-chatbot`
 - Commit: `9744619` (`merge: integrate latest main into feat/telegram-chatbot`)
 - Push: Successful (`origin/feat/telegram-chatbot`)
+
+---
+
+### 2026-10-09 16:20
+
+**User Request**
+> use this log in pace of kpmg log in YOUR whole website and aslo the name of platform should be DocSure
+
+**Exploration**
+- Found previous logo at `frontend/public/logo.png` (KPMG logo).
+- Located uploaded logo image at `.user_uploaded/media_1791542239489.png` with shield mark and "DocSure" wordmark.
+- Cleaned the red spellcheck error line below "DocSure" using pixel manipulation for a professional finish.
+- Located frontend product name single-source-of-truth in `frontend/src/lib/appInfo.ts` (`APP_NAME`).
+- Identified logo usages in `frontend/src/design-system/Nav.tsx`, `frontend/src/pages/LoginPage.tsx`, and `frontend/index.html`.
+
+**Work Done**
+- Replaced `frontend/public/logo.png` with the new clean DocSure logo.
+- Updated `APP_NAME` in `frontend/src/lib/appInfo.ts` from `"Agnitia"` to `"DocSure"`.
+- Updated `Nav.tsx` and `LoginPage.tsx` logo `<img>` tags to include `alt={APP_NAME}` and `object-contain`.
+- Updated localStorage language preference key across pages (`LoginPage.tsx`, `CaseDetailPage.tsx`, `CaseFormPage.tsx`, `FamilyPage.tsx`) to `docsure_lang` (maintaining backward-compatible fallback to `agnitia_lang`).
+- Updated domain references in `frontend/src/lib/organisation.ts` comments to `docsure.com`.
+
+**Files Changed**
+- `frontend/public/logo.png`
+  - Replaced KPMG logo with the DocSure shield logo.
+- `frontend/src/lib/appInfo.ts`
+  - Changed `APP_NAME` from `"Agnitia"` to `"DocSure"`.
+- `frontend/src/design-system/Nav.tsx`
+  - Added `alt={APP_NAME}` and `object-contain` to navigation logo.
+- `frontend/src/pages/LoginPage.tsx`
+  - Added `alt={APP_NAME}` and `object-contain` to sign-in logo; updated language storage key.
+- `frontend/src/pages/CaseDetailPage.tsx`
+  - Updated language storage key to `docsure_lang`.
+- `frontend/src/pages/CaseFormPage.tsx`
+  - Updated language storage key to `docsure_lang`.
+- `frontend/src/pages/FamilyPage.tsx`
+  - Updated language storage key to `docsure_lang`.
+- `frontend/src/lib/organisation.ts`
+  - Updated domain examples from `agnitia.com` to `docsure.com`.
+- `memory.md`
+  - Updated project memory and interaction log.
+
+**Verification**
+- Verified `logo.png` visually and programmatically (red spellcheck underline removed, DocSure wordmark and shield preserved).
+- Inspected full `git diff` across all changed files to ensure clean and targeted edits.
+- Confirmed no secrets, tokens, or private credentials staged.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Commit: `8cb5354` (`feat: update platform branding to DocSure and replace KPMG logo`)
+- Push: Successful (`origin/feat/telegram-chatbot`)
+- Status: Complete
