@@ -31,7 +31,7 @@ import { FileDropzone, type FileWithProgress } from "@/components/upload/FileDro
 import { SignatureReferenceCreator } from "@/components/upload/SignatureReferenceCreator"
 import { useAuth } from "@/hooks/useAuth"
 import { useUploadLimits } from "@/hooks/useUploadLimits"
-import { clientUploadProblem, ACCEPTED_UPLOAD_TYPES, ACCEPTED_IDENTITY_UPLOAD_TYPES } from "@/lib/uploadLimits"
+import { clientUploadProblem, ACCEPTED_UPLOAD_TYPES_STRING, ACCEPTED_IDENTITY_UPLOAD_TYPES_STRING } from "@/lib/uploadLimits"
 import { CASE_TYPE_LABELS, CASE_TYPES, isIdentityCase, type Case } from "@/types/case"
 import type { CaseDocument, CaseType, SignatureReference } from "@/types/case"
 
@@ -553,7 +553,7 @@ export function NewCasePage() {
                       onFileRemoved={removeFile}
                       disabled={isSubmitting}
                       maxFileBytes={maxFileBytes}
-                      acceptedTypes={isIdentity ? ACCEPTED_IDENTITY_UPLOAD_TYPES : ACCEPTED_UPLOAD_TYPES}
+                      acceptedTypes={isIdentity ? ACCEPTED_IDENTITY_UPLOAD_TYPES_STRING : ACCEPTED_UPLOAD_TYPES_STRING}
                       hintText={isIdentity ? "PDF, JPG, PNG or TIFF" : "PDF only"}
                     />
                     {filesError && <p className="text-sm text-destructive">{filesError}</p>}
