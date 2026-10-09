@@ -116,6 +116,11 @@ export function CaseDetailPage() {
     }
   }, [currentLang])
 
+  React.useEffect(() => {
+    setSelectedDocIndex(0)
+    setViewerFile(null)
+  }, [caseId])
+
   const [selectedBox, setSelectedBox] = React.useState<BoundingBox | null>(null)
   const { isOrgSite } = useOrganisation()
   const isReady = Boolean(caseId && token)
