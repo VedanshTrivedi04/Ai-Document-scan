@@ -1715,6 +1715,50 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Commit: `8cb5354` (`feat: update platform branding to DocSure and replace KPMG logo`)
+- Commit: `91f93c4` (`feat: update platform branding to DocSure and replace KPMG logo`)
 - Push: Successful (`origin/feat/telegram-chatbot`)
 - Status: Complete
+
+---
+
+### 2026-10-09 16:32
+
+**User Request**
+> new upload feature have one bug: when i click on the claim documnet after then i clikc on the person documnet it is not working / "ye yaha oar yar" (with screenshot of New Case page)
+
+**Exploration**
+- Investigated `frontend/src/pages/NewCasePage.tsx` (`/cases/new`).
+- Identified root cause of the bug:
+  1. `submissionCategory` was stored as separate React state (`useState`) while `caseType` was tracked via React Hook Form.
+  2. In `<SelectContent>`, `<SelectItem>` options were conditionally rendered depending on `submissionCategory`.
+  3. When category toggled, Radix UI Select's internal unmount cleanup fired `onValueChange("")` when removing the active option.
+  4. The `onValueChange` handler ran `if (isIdentityCase(val)) ... else setSubmissionCategory("claim")`. Since `val` was empty string `""`, `isIdentityCase("")` returned `false`, instantly overriding `submissionCategory` back to `"claim"`.
+  5. Consequently, clicking "Person's documents" after "Claim documents" was continuously overridden, leaving the "Specific case type" dropdown empty ("Select a case type").
+
+**Work Done**
+- In `frontend/src/pages/NewCasePage.tsx`:
+  - Replaced duplicate `useState` with derived state: `const submissionCategory = isIdentity ? "person" : "claim"`, eliminating state desync.
+  - Updated `handleCategorySelect` to pass `{ shouldValidate: true, shouldDirty: true }` with `setValue`.
+  - Added `key={submissionCategory}` to `<Select>` to mount a fresh, isolated Select instance per category without unmount event pollution.
+  - Added `if (val) field.onChange(val)` guard in `onValueChange`.
+  - Removed unused `CaseType` import.
+- Built and validated frontend bundle via Docker (`tsc -b && vite build`), confirmed 0 TypeScript/build errors.
+- Restarted `docauth-frontend` container.
+
+**Files Changed**
+- `frontend/src/pages/NewCasePage.tsx`
+  - Fixed category toggle bug between person and claim documents; added key to Select and derived submissionCategory.
+- `memory.md`
+  - Updated project memory and interaction log.
+
+**Verification**
+- TypeScript build check passed cleanly (`tsc -b && vite build` built in 1.72s).
+- Verified full `git diff` for `NewCasePage.tsx`.
+- Confirmed `docauth-frontend` container running and serving updated build.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Commit: `cdd7ded` (`fix: resolve category toggle issue between person and claim documents on new case page`)
+- Push: Successful (`origin/feat/telegram-chatbot`)
+- Status: Complete
+
