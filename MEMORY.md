@@ -1535,3 +1535,37 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Branch: `feat/telegram-chatbot`
 - Commit: 7d35344 (fix: replace ConversationHandler with top-level media handlers to prevent dropped uploads)
 - Push: Successful (origin/feat/telegram-chatbot)
+
+---
+
+### 2026-10-09 14:22
+
+**User Request**
+> "@[TerminalName: powershell, ProcessId: 23556] services chal ni kya forntent backend ki ?"
+
+**Exploration**
+- Inspected Terminal 23556 logs where `docker compose up --watch` failed:
+  - Error: `Can't locate revision identified by 'd9e1f3a5b7c2'` causing `docauth-backend` crash loop (`unhealthy`).
+  - `docauth-frontend` failed to start because it depends on `backend: condition: service_healthy`.
+- Queried PostgreSQL `alembic_version` table via worker container:
+  - Found `alembic_version` was set to orphaned revision `d9e1f3a5b7c2` that did not exist in `app/db/migrations/versions`.
+  - The actual schema already had all migrations applied, up to HEAD revision `f6b0d2e4a8c7` (`companies.subdomain`).
+
+**Work Done**
+- Synchronized `alembic_version` table to match current repository migration head `f6b0d2e4a8c7`.
+- Verified `alembic upgrade head` executed cleanly with 0 errors.
+- Restarted `docauth-backend` container: Uvicorn started, passed healthcheck, and reached `healthy` state.
+- Started `docauth-frontend` via `docker compose up -d`: Nginx reverse proxy started successfully.
+
+**Verification**
+- `docker ps`:
+  - `docauth-backend`: Up, Healthy on port 8000
+  - `docauth-frontend`: Up on port 80
+  - `docauth-redis`: Up, Healthy on port 6379
+  - All Celery workers (`extraction`, `vision`, `forensics`, `beat`): Up
+- Backend health endpoint: HTTP 200 OK
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Commit: Database state synchronization (no repository code change)
+- Push: Clean
