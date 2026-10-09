@@ -188,6 +188,10 @@ class Settings(BaseSettings):
     llm_api_key: str | None = Field(default=None, alias="LLM_API_KEY")
     llm_model: str | None = Field(default=None, alias="LLM_MODEL")
     llm_request_timeout_seconds: float = Field(default=120.0, alias="LLM_REQUEST_TIMEOUT_SECONDS")
+    # Dedicated Vision LLM (e.g. Gemini Vision for images while Groq handles text)
+    vision_llm_base_url: str | None = Field(default=None, alias="VISION_LLM_BASE_URL")
+    vision_llm_api_key: str | None = Field(default=None, alias="VISION_LLM_API_KEY")
+    vision_llm_model: str | None = Field(default=None, alias="VISION_LLM_MODEL")
 
     # --- Translation (app/services/translation_service.py) ---
     # Google Cloud Translation API key. Without it, messages are available in

@@ -752,4 +752,57 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
    - When a new document finishes processing, Celery task `run_cross_document_checks` triggers across all
      completed documents in the case, comparing names, dates of birth, addresses, and ID numbers.
 
+---
+
+## 19. Comprehensive End-to-End (E2E) Verification with Playwright (added 9 October 2026)
+
+### What was tested and verified across portals:
+
+1. **Citizen Onboarding & Household Creation (`localhost`):**
+   - New citizen account creation via public registration tab (`POST /auth/register`).
+   - Setup of household via `/family` (`POST /family`), correctly assigning citizen as household head.
+
+2. **Multi-Document Profile Appending & Cross-Document Contradiction Detection:**
+   - Intake of initial Aadhaar card (Name: *Rahul Sharma*, DOB: *15/08/1990*).
+   - In-profile direct upload (`+ Add document to profile`) of PAN card with deliberate discrepancy (DOB: *15/08/1991*).
+   - Celery async worker executed pairwise OCR & `identity_consistency` contradiction engine.
+   - **Result:** Contradiction detected immediately:
+     > *"Date of birth does not match: 15 August 1990 on the identity card and 15 August 1991 on the tax identity card (The years are 1 year apart)."*
+
+3. **Citizen Self-Resolution Without Corporate Blockers:**
+   - Citizen clicked "Use this" to choose the authoritative DOB (*15 August 1990*).
+   - `PUT /cases/{id}/profile/date_of_birth` succeeded (with fixed `has_rank` import).
+   - Profile automatically transitioned to **Profile ready** with the selected value marked as chosen.
+   - On `/family`, the household verification check transitioned from *Not checked* to **1 Match** (*"Rahul Sharma: the documents match the details entered for this family member."*).
+
+4. **Corporate Reviewer Hierarchy & Decision Auditing:**
+   - Logged in as corporate reviewer (`reviewer1@example.com`).
+   - Active Case Queue displayed prioritized triage list with flags and metrics.
+   - Reviewer opened case, inspected documents, and approved the case.
+   - Status updated to **Approved** and immutable audit log captured every step (`case_created` → `document_uploaded` → `cross_document_check_completed` → `profile_value_chosen` → `case_approved`).
+
+5. **Operational Dashboard & Priority Queue (`/dashboard`):**
+   - KPI cards accurately rendered real-time stats (6 documents across 5 cases).
+   - Risk tier distribution chart and priority triage queue listed open pending cases.
+
+6. **Append-Only Compliance Audit Trail (`/audit-history`):**
+   - Verified that every single actor, action (`case_approved`, `profile_value_chosen`, `document_uploaded`, `case_created`, etc.), timestamp, and case reference are strictly preserved and searchable.
+
+7. **Pre-filled Application Forms (`/forms/income_certificate_application`):**
+   - Automated pre-filling verified: 5 of 10 fields filled directly from verified documents (Full name, DOB, Address, Postal code, ID number) with lock indicators, allowing the applicant to supply missing fields (Father's name, Gender, Annual income).
+
+8. **RBAC & Multi-Tenant Route Guard Enforcement:**
+   - Tested accessing platform superadmin routes (`/platform/companies`) while logged in as a company Reviewer L1.
+   - Verified that route was blocked with clear access restriction message (*"Platform admin access required. Your account (Reviewer L1 role) doesn't have access to this page."*).
+
+9. **Platform Superadmin Administration & Celery Queues (`/platform/companies`, `/platform/queues`):**
+   - Logged in as Superadmin (`admin@example.com`).
+   - Verified tenant company management table across companies, site addresses, upload limits, and suspension controls.
+   - Verified real-time Celery queue metrics on `/platform/queues`:
+     - `extraction_queue` (Azure Document Intelligence): **Healthy** (0 waiting, 0 running, avg wait 0.0s).
+     - `vision_queue` (Azure OpenAI): **Healthy**.
+     - `forensics_queue` (Local CPU): **Healthy** (0 waiting, avg wait 0.1s).
+
+
+
 

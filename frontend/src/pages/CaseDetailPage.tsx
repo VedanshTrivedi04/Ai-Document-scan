@@ -8,7 +8,6 @@ import {
   FileTextIcon,
   GlobeIcon,
   ShieldCheckIcon,
-  UploadCloudIcon,
   UsersIcon,
   PlusIcon,
   Loader2Icon,
@@ -116,6 +115,7 @@ export function CaseDetailPage() {
     }
   }, [currentLang])
 
+  const [selectedBox, setSelectedBox] = React.useState<BoundingBox | null>(null)
   const { isOrgSite } = useOrganisation()
   const isReady = Boolean(caseId && token)
   // Submitters never receive their own case's risk tier/score/reasons (the
@@ -125,11 +125,6 @@ export function CaseDetailPage() {
   const isSupportView = isPlatformAdmin(user?.role)
   const isReviewerRole = hasRank(user?.role, "reviewer_l1") || isSupportView
   const canExport = hasRank(user?.role, "reviewer_l1")
-
-  // For normal citizen portal (localhost / non-org):
-  // The submitter acts as the family head. They can review and resolve profile choices for their family members,
-  // while the corporate reviewer decision panel (approve/reject/escalate) is hidden.
-  const isFamilyHead = Boolean(user && caseDetail?.submitted_by?.id === user.id)
   const shouldShowReviewerPanel = Boolean(isOrgSite || isReviewerRole)
 
   // Available languages from GET /i18n/languages (public)
@@ -187,6 +182,11 @@ export function CaseDetailPage() {
       return false
     },
   })
+
+  // For normal citizen portal (localhost / non-org):
+  // The submitter acts as the family head. They can review and resolve profile choices for their family members,
+  // while the corporate reviewer decision panel (approve/reject/escalate) is hidden.
+  const isFamilyHead = Boolean(user && caseDetail?.submitted_by?.id === user.id)
 
   const { data: auditLog, isLoading: isAuditLoading } = useQuery({
     queryKey: ["caseAuditLog", caseId, token],

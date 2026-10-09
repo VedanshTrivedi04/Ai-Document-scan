@@ -1682,8 +1682,13 @@ def get_llm_service() -> LLMService:
         from app.services.llm_openai_compatible import OpenAICompatibleLLMService
 
         _llm_service_singleton = OpenAICompatibleLLMService(
-            settings.llm_base_url, settings.llm_api_key, settings.llm_model,
-            settings.llm_request_timeout_seconds,
+            base_url=settings.llm_base_url,
+            api_key=settings.llm_api_key,
+            model=settings.llm_model,
+            timeout_seconds=settings.llm_request_timeout_seconds,
+            vision_base_url=settings.vision_llm_base_url,
+            vision_api_key=settings.vision_llm_api_key,
+            vision_model=settings.vision_llm_model,
         )
     if _llm_service_singleton is None:
         _llm_service_singleton = AzureOpenAILLMService(

@@ -94,7 +94,22 @@ def _view(db: Session, family: Family, language: str) -> dict[str, Any]:
         zip(family_checks.RELATION_LABELS, translate(list(family_checks.RELATION_LABELS.values()), language))
     )
     for member in family.members:
-        cases = [c for c in member.cases if is_identity_case_type(c.case_type)]
+        if member.relation == RELATION_SELF:
+            cases = [
+                c for c in member.cases if is_identity_case_type(c.case_type)
+            ]
+            # Also find standalone identity cases submitted by the head without explicit family_member_id
+            standalone_cases = db.execute(
+                select(Case).where(
+                    Case.submitted_by_user_id == family.head_user_id,
+                    Case.family_member_id.is_(None),
+                    Case.company_id == family.company_id,
+                )
+            ).scalars().all()
+            cases.extend([c for c in standalone_cases if is_identity_case_type(c.case_type) and c not in cases])
+            cases.sort(key=lambda c: c.created_at)
+        else:
+            cases = [c for c in member.cases if is_identity_case_type(c.case_type)]
         profiles = {c.id: load_profile(db, c) for c in cases}
         latest = cases[-1] if cases else None
         profile = profiles[latest.id] if latest else None

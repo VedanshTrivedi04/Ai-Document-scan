@@ -20,7 +20,7 @@ from app.api.case_access import ensure_can_act, load_visible_case, scoped_compan
 from app.api.tenant_access import CaseScope, get_case_scope
 from app.models.base import utcnow
 from app.models.case import Case, CaseStatus, CaseType, is_identity_case_type
-from app.models.user import User, UserRole, role_label
+from app.models.user import User, UserRole, has_rank, role_label
 from app.services import form_templates
 from app.services.audit_service import record_event
 from app.services.case_profile import load_profile, profile_documents

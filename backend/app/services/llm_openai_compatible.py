@@ -24,6 +24,9 @@ from typing import Any
 from app.services.llm_service import (
     MAX_TOKENS_CLASSIFICATION,
     MAX_TOKENS_ENTITY_MATCH,
+    MAX_TOKENS_SIGNATURE_COMPARISON,
+    MAX_TOKENS_SIGNATURE_DETECTION,
+    MAX_TOKENS_VISUAL_REVIEW,
     DocumentAnalysis,
     EntityMatchJudgment,
     IdentityAnalysis,
@@ -36,9 +39,15 @@ from app.services.llm_service import (
     _analysis_json_schema,
     _entity_match_json_schema,
     _identity_json_schema,
+    _page_visual_analysis_json_schema,
+    _signature_comparison_json_schema,
+    _signature_detection_json_schema,
     _ENTITY_MATCH_SYSTEM_PROMPT,
     _IDENTITY_SYSTEM_PROMPT_TEMPLATE,
+    _SIGNATURE_COMPARISON_SYSTEM_PROMPT,
+    _SIGNATURE_DETECTION_SYSTEM_PROMPT,
     _SYSTEM_PROMPT_TEMPLATE,
+    _VISUAL_INCONSISTENCY_SYSTEM_PROMPT,
 )
 
 _JSON_INSTRUCTION = (
@@ -172,7 +181,16 @@ def _retry_after_seconds(exc: Exception, attempt: int) -> float:
 
 
 class OpenAICompatibleLLMService(LLMService):
-    def __init__(self, base_url: str | None, api_key: str | None, model: str | None, timeout_seconds: float):
+    def __init__(
+        self,
+        base_url: str | None,
+        api_key: str | None,
+        model: str | None,
+        timeout_seconds: float,
+        vision_base_url: str | None = None,
+        vision_api_key: str | None = None,
+        vision_model: str | None = None,
+    ):
         if not base_url or not model:
             raise LLMConfigurationError(
                 "LLM_BASE_URL and LLM_MODEL must be set in backend/.env for LLM_PROVIDER=openai_compatible "
@@ -181,14 +199,34 @@ class OpenAICompatibleLLMService(LLMService):
         from openai import OpenAI
 
         self._model = model
-        # A local server such as Ollama needs no key; the client still wants a value.
-        # Retries are handled here (see _chat_json), not by the client.
         self._client = OpenAI(
             base_url=base_url, api_key=api_key or "not-needed", timeout=timeout_seconds, max_retries=0
         )
+        # Dedicated Vision model (e.g. Gemini Vision for images while Groq processes text)
+        self._vision_model = vision_model or model
+        if vision_base_url:
+            self._vision_client = OpenAI(
+                base_url=vision_base_url,
+                api_key=vision_api_key or "not-needed",
+                timeout=timeout_seconds,
+                max_retries=0,
+            )
+        else:
+            self._vision_client = self._client
 
-    def _chat_json(self, system_prompt: str, user_content: str, schema: dict[str, Any], max_tokens: int) -> dict[str, Any]:
+    def _chat_json(
+        self,
+        system_prompt: str,
+        user_content: str | list[dict[str, Any]],
+        schema: dict[str, Any],
+        max_tokens: int,
+        temperature: float = 0,
+        use_vision_client: bool = False,
+    ) -> dict[str, Any]:
         from openai import APIError, RateLimitError
+
+        client = self._vision_client if use_vision_client else self._client
+        model = self._vision_model if use_vision_client else self._model
 
         messages = [
             {"role": "system", "content": system_prompt + _JSON_INSTRUCTION
@@ -197,21 +235,22 @@ class OpenAICompatibleLLMService(LLMService):
         ]
         for attempt in range(_RATE_LIMIT_ATTEMPTS):
             try:
-                response = self._client.chat.completions.create(
-                    model=self._model,
+                response = client.chat.completions.create(
+                    model=model,
                     messages=messages,
                     response_format={"type": "json_object"},
                     max_tokens=max_tokens,
-                    temperature=0,
+                    temperature=temperature,
                 )
                 break
             except RateLimitError as exc:
-                # Free tiers allow few requests a minute: wait as long as the
-                # service asks (or a growing pause) and try again.
                 if attempt == _RATE_LIMIT_ATTEMPTS - 1:
                     raise LLMOperationError(f"LLM request failed: {exc}") from exc
                 time.sleep(_retry_after_seconds(exc, attempt))
             except APIError as exc:
+                if (getattr(exc, "status_code", None) in (503, 500, 502) or "temporar" in str(exc).lower() or "high demand" in str(exc).lower()) and attempt < _RATE_LIMIT_ATTEMPTS - 1:
+                    time.sleep(2.0 * (attempt + 1))
+                    continue
                 raise LLMOperationError(f"LLM request failed: {exc}") from exc
         content = (response.choices[0].message.content or "").strip()
         if content.startswith("```"):
@@ -222,7 +261,6 @@ class OpenAICompatibleLLMService(LLMService):
             raise LLMOperationError(f"The LLM did not return valid JSON: {exc}") from exc
         if not isinstance(parsed, dict):
             raise LLMOperationError("The LLM did not return a JSON object.")
-        # Some models wrap the answer the way a schema is written.
         if isinstance(parsed.get("properties"), dict) and not set(parsed) & set(schema.get("properties", {})):
             parsed = parsed["properties"]
         return _repair(schema, parsed)
@@ -260,10 +298,53 @@ class OpenAICompatibleLLMService(LLMService):
         return EntityMatchJudgment.model_validate(parsed)
 
     def analyze_page_visual_consistency(self, image_data_uri: str) -> PageVisualAnalysis:
-        raise LLMConfigurationError(_NO_VISION)
+        parsed = self._chat_json(
+            _VISUAL_INCONSISTENCY_SYSTEM_PROMPT,
+            [
+                {"type": "text", "text": "Analyze this document page image per the instructions."},
+                {"type": "image_url", "image_url": {"url": image_data_uri, "detail": "high"}},
+            ],
+            _page_visual_analysis_json_schema(),
+            max_tokens=2048,
+            temperature=0.4,
+            use_vision_client=True,
+        )
+        try:
+            return PageVisualAnalysis.model_validate(parsed)
+        except ValueError as exc:
+            raise LLMOperationError(f"The LLM reply did not match the expected shape: {exc}") from exc
 
     def compare_signatures(self, ref_image_data_uri: str, target_image_data_uri: str) -> SignatureComparisonResult:
-        raise LLMConfigurationError(_NO_VISION)
+        parsed = self._chat_json(
+            _SIGNATURE_COMPARISON_SYSTEM_PROMPT,
+            [
+                {"type": "text", "text": "Compare these two signature/stamp images and return your assessment."},
+                {"type": "image_url", "image_url": {"url": ref_image_data_uri, "detail": "high"}},
+                {"type": "image_url", "image_url": {"url": target_image_data_uri, "detail": "high"}},
+            ],
+            _signature_comparison_json_schema(),
+            max_tokens=1024,
+            temperature=0,
+            use_vision_client=True,
+        )
+        try:
+            return SignatureComparisonResult.model_validate(parsed)
+        except ValueError as exc:
+            raise LLMOperationError(f"The LLM reply did not match the expected shape: {exc}") from exc
 
     def detect_signatures_stamps(self, image_data_uri: str) -> PageSignatureDetection:
-        raise LLMConfigurationError(_NO_VISION)
+        parsed = self._chat_json(
+            _SIGNATURE_DETECTION_SYSTEM_PROMPT,
+            [
+                {"type": "text", "text": "Locate any signature or stamp on this page."},
+                {"type": "image_url", "image_url": {"url": image_data_uri, "detail": "high"}},
+            ],
+            _signature_detection_json_schema(),
+            max_tokens=2048,
+            temperature=0,
+            use_vision_client=True,
+        )
+        try:
+            return PageSignatureDetection.model_validate(parsed)
+        except ValueError as exc:
+            raise LLMOperationError(f"The LLM reply did not match the expected shape: {exc}") from exc
