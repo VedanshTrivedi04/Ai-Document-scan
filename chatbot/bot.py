@@ -196,10 +196,10 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
 
     if count >= MAX_DOCS:
         await update.message.reply_text(
-            f"✅ *All {MAX_DOCS} documents received & scanned!*\n\n"
+            f"✅ *Adhiktam {MAX_DOCS} dastavej prapt ho gaye!*\n\n"
             f"{docs_preview_text}"
             f"{quality_banner}\n\n"
-            "⏳ *Running cross-document contradiction check...*",
+            "⏳ *Cross-Document Contradiction Engine shuru ho raha hai...*",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=ReplyKeyboardRemove(),
         )
@@ -207,25 +207,32 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
         return
 
     if count >= 2:
-        await update.message.reply_text(
-            f"✅ *Scan Safal ({count} Dastavej Prapt)!*\n\n"
+        keyboard = [
+            [VERIFY_BUTTON_TEXT],
+            ["➕ Aur Dastavej Bhejein", "🔄 Nayi Jaanch (/start)"]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        msg = (
+            f"✅ *Dastavej {count} Scanned!*\n\n"
             f"{docs_preview_text}"
             f"{quality_banner}\n\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
-            "⚡ *Haath-ke-haath Cross-Document Verification shuru ho rahi hai...*",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=ReplyKeyboardRemove(),
+            f"📊 Bundle: *{count}/{MAX_DOCS} Dastavej Prapt*\n\n"
+            "👉 Aap chahein to aur dastavej (jaise PAN / Address Proof) bhej sakte hain,\n"
+            f"YA niche *'{VERIFY_BUTTON_TEXT}'* dabakar sabhi dastavejon ka aapas me milan check karein!"
         )
-        await _trigger_verification(update, context)
-        return
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
     else:
-        reply_markup = ReplyKeyboardRemove()
+        keyboard = [
+            ["➕ Agla Dastavej Bhejein", "🔄 Nayi Jaanch (/start)"]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
         msg = (
             f"✅ *Pehla Dastavej Scan Ho Gaya!*\n\n"
             f"{docs_preview_text}"
             f"{quality_banner}\n\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
-            "📄 *Agla Kadam:* Kripya dusra dastavej (jaise PAN Card ya Aay Praman Patra) bhejiye taaki dono ke beech milan aur jaanch ho sake."
+            "📄 *Agla Kadam:* Kripya dusra dastavej (jaise PAN Card ya Address Proof) bhejiye taaki dono ke beech milan (Cross-Verification) ho sake."
         )
         await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
 

@@ -116,6 +116,8 @@ def _get_resolution_precedence(field: str, reason: str, d1: str, d2: str) -> str
         return "Dono dastavej alag-alag vyakti ke lag rahe hain. Kripya sunishchit karein ki dono dastavej ek hi aavedak ke hon."
     if "name" in f:
         return "Naam me chhota antar Gazette Notification ya SDM / Notary dwara Affidavit (Shapath Patra) banwakar theek kiya ja sakta hai."
+    if "address" in f:
+        return "Pate (Address) me antar hone par UIDAI Portal (myaadhaar.uidai.gov.in) par jakar naya valid Address Proof (jaise Bijli Bill ya Voter ID) upload karke pata update karwayein."
     if "gender" in f:
         return "Gender mismatch ko nazdeeki Aadhaar / PAN kendra par jakar turant update karwayein."
     return "Sambandhit vibhag (CSC / Tehsildar karyalay) me jakar dastavej sudhar karwayein."

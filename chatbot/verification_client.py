@@ -533,12 +533,20 @@ def _infer_document_type(filename: str) -> str:
         return "national_id_card"
     if "pan" in f or "tax" in f:
         return "tax_id_card"
-    if "income" in f:
+    if "income" in f or "aay" in f:
         return "income_certificate"
-    if "voter" in f or "epic" in f:
+    if "voter" in f or "epic" in f or "election" in f:
         return "voter_id_card"
-    if "address" in f or "bill" in f:
+    if "address" in f or "bill" in f or "electricity" in f or "water" in f or "gas" in f:
         return "address_proof"
+    if "ration" in f:
+        return "ration_card"
+    if "marksheet" in f or "matric" in f or "10th" in f or "12th" in f:
+        return "marksheet"
+    if "driving" in f or "dl" in f or "license" in f:
+        return "driving_license"
+    if "passport" in f:
+        return "passport"
     return "national_id_card"
 
 
@@ -578,6 +586,8 @@ def get_document_preview_summary(bundle_doc: BundleDocument, index: int = 1) -> 
     num = fields.get("id_number", {}).get("value") or "-"
     gender = fields.get("gender", {}).get("raw_text") or fields.get("gender", {}).get("value") or ""
     parent = fields.get("parent_or_spouse_name", {}).get("value") or ""
+    address = fields.get("address", {}).get("value") or ""
+    income = fields.get("annual_income", {}).get("raw_text") or fields.get("annual_income", {}).get("value")
 
     lines = [
         f"📄 *Dastavej {index}: {type_label}*",
@@ -591,6 +601,10 @@ def get_document_preview_summary(bundle_doc: BundleDocument, index: int = 1) -> 
         lines.append(f"   ⚧ *Gender:* `{gender}`")
     if num != "-":
         lines.append(f"   🆔 *ID Number:* `{num}`")
+    if address:
+        lines.append(f"   📍 *Pata (Address):* `{address}`")
+    if income:
+        lines.append(f"   💰 *Varshik Aay:* `{income}`")
 
     return "\n".join(lines)
 

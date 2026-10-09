@@ -1457,8 +1457,48 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Commit: `34e1676` (`feat: purge mock fallbacks, connect live Vision and instant cross-document contradiction checks`)
+- Commit: `34e1676` & `fef7c1a` (`feat: purge mock fallbacks, connect live Vision and instant cross-document contradiction checks`)
 - Push: Successful (`origin/feat/telegram-chatbot`)
+
+---
+
+### 2026-10-09 14:05
+
+**User Request**
+> "user multiple dcoumnet bhi to de saktah ha pan card , adhar , address proff hamne platdform me sab dal rakha ahi hme bus vhi same output udar se karna vaha hai user ne image di use vese hi puchu ki cross verifucation ki bad documnet check fir apne syatem jese work kar araha usi parr aa ajaye or result hm idar ui me dikh ta usi ko udar show kar va dege pele batao kya samje , kese karo ge then karo" ... "okhhh"
+
+**Exploration**
+- Reviewed frontend `IdentityFindingsPanel.tsx`, `DocumentChecksPanel.tsx`, and backend `find_identity_contradictions`.
+- Verified that the website does not use a separate custom endpoint for verification; it uses `find_identity_contradictions` with `DOCUMENT_LABELS`, `build_message`, and `SEVERITY_ORDER`.
+- Analyzed multi-document intake flow: citizen sends Document 1 (e.g. Aadhaar), receives instant Document Check card (Type, Name, ID, Address, Quality & Forensics status), is prompted whether to upload additional documents (PAN / Address Proof) or execute cross-verification, and can chain up to 5 documents.
+
+**Work Done**
+- Updated `chatbot/verification_client.py`:
+  - Expanded `_infer_document_type` to recognize Address Proofs (electricity bill, water bill, gas bill), Voter ID / EPIC, Ration Cards, Marksheets, Driving Licenses, and Passports.
+  - Enhanced `get_document_preview_summary` to include extracted Address (`📍 Pata`) and Annual Income (`💰 Varshik Aay`) alongside Name, DOB, Gender, and ID number.
+- Updated `chatbot/explainer.py`:
+  - Added Address conflict resolution precedence guidance pointing to UIDAI Self-Service Update Portal (`myaadhaar.uidai.gov.in`).
+- Updated `chatbot/bot.py`:
+  - Configured interactive intake progression: each document upload displays a live Document Check card and prompts the citizen with interactive buttons (`[ 🔍 Verify Bundle ]`, `[ ➕ Aur Dastavej Bhejein ]`).
+  - Added button detection for `"cross"`, `"verify"`, `"jaanch"`, and `"aur dastavej"`.
+  - When cross-verification runs, formats the exact website UI structure (`IdentityFindingsPanel`): Scanned Bundle Overview, Critical Mismatches with Side-by-Side values & Official Precedence, Harmless Variants, and Exact Matches.
+
+**Files Changed**
+- `chatbot/verification_client.py`: Extended document type classification and preview cards to support address proof and income.
+- `chatbot/explainer.py`: Added address conflict precedence advice.
+- `chatbot/bot.py`: Connected interactive multi-document intake flow and action buttons.
+- `memory.md`: Updated interaction history.
+
+**Verification**
+- Executed 3-document cross-verification test (Aadhaar + PAN + Address Proof):
+  - Extracted real person `"Vikas Rathore"` on all 3 cards with zero mock data.
+  - Backend contradiction engine identified exact 15-year DOB conflict across documents and 3 matching fields.
+  - Report formatted cleanly with side-by-side comparison.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Commit: Pending staging and commit.
+- Push: Pending.
 
 
 
