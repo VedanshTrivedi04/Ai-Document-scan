@@ -6,7 +6,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { z } from "zod"
 
-import { createCase, uploadDocument } from "@/api/cases"
+import { createCase, listCases, uploadDocument } from "@/api/cases"
 import { getMyFamily } from "@/api/family"
 import { ApiError } from "@/api/client"
 import { Button } from "@/components/ui/button"
@@ -30,6 +30,7 @@ import {
 import { FileDropzone, type FileWithProgress } from "@/components/upload/FileDropzone"
 import { SignatureReferenceCreator } from "@/components/upload/SignatureReferenceCreator"
 import { useAuth } from "@/hooks/useAuth"
+import { useOrganisation } from "@/hooks/useOrganisation"
 import { useUploadLimits } from "@/hooks/useUploadLimits"
 import { clientUploadProblem, ACCEPTED_UPLOAD_TYPES_STRING, ACCEPTED_IDENTITY_UPLOAD_TYPES_STRING } from "@/lib/uploadLimits"
 import { CASE_TYPE_LABELS, CASE_TYPES, isIdentityCase, type Case } from "@/types/case"
@@ -49,6 +50,7 @@ type CaseTypeFormValues = z.infer<typeof caseTypeSchema>
 
 export function NewCasePage() {
   const { token, user } = useAuth()
+  const { isOrgSite } = useOrganisation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const initialFamilyMemberId = searchParams.get("family_member_id")
@@ -63,6 +65,7 @@ export function NewCasePage() {
   const [formError, setFormError] = React.useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [createdCase, setCreatedCase] = React.useState<Case | null>(null)
+  const [forceNewCase, setForceNewCase] = React.useState(false)
 
   // Uploaded document records (returned by the upload endpoint) — used to
   // populate the "Set as reference signature" list after all uploads complete.
@@ -81,6 +84,13 @@ export function NewCasePage() {
     queryKey: ["family", "me"],
     queryFn: () => getMyFamily("en", token!),
     enabled: Boolean(token && !isPlatformAdmin),
+  })
+
+  // Check for any existing identity cases for the current user
+  const { data: userCases } = useQuery({
+    queryKey: ["cases", "identity", token],
+    queryFn: () => listCases(token!, { case_type: "identity_verification" }),
+    enabled: Boolean(token && !isPlatformAdmin && !isOrgSite),
   })
 
   const isHead = familyData?.head_user_id === user?.id
@@ -102,6 +112,48 @@ export function NewCasePage() {
   const selectedCaseType = watch("caseType")
   const isIdentity = isIdentityCase(selectedCaseType)
   const [submissionCategory, setSubmissionCategory] = React.useState<"person" | "claim">("person")
+
+  // Target existing case for identity bundle reuse
+  const existingCaseIdToReuse = React.useMemo(() => {
+    if (forceNewCase || !isIdentity || isOrgSite) return null
+
+    // If a household member is selected, reuse their latest case if available
+    if (selectedMember?.latest_case_id) {
+      return selectedMember.latest_case_id
+    }
+
+    // If head/self is selected or no specific member is chosen, check if self has an existing case
+    if (selectedFamilyMemberId) {
+      const member = familyData?.members?.find((m) => m.id === selectedFamilyMemberId)
+      if (member?.latest_case_id) return member.latest_case_id
+    }
+
+    // If user has familyData, find the 'self' member or head member
+    const selfMember = familyData?.members?.find((m) => m.is_head || m.relation === "self")
+    if (selfMember?.latest_case_id) {
+      return selfMember.latest_case_id
+    }
+
+    // Check user's most recent identity case from listCases
+    const myCases = (userCases || []).filter(
+      (c) => !user?.id || c.submitted_by?.id === user.id || c.submitted_by?.email === user.email
+    )
+    if (myCases.length > 0) {
+      return myCases[0].id
+    }
+
+    return null
+  }, [forceNewCase, isIdentity, isOrgSite, selectedMember, selectedFamilyMemberId, familyData, userCases, user])
+
+  const existingCaseNumber = React.useMemo(() => {
+    if (!existingCaseIdToReuse) return null
+    if (selectedMember?.cases?.length) {
+      const match = selectedMember.cases.find((c) => c.id === existingCaseIdToReuse)
+      if (match) return match.case_number
+    }
+    const match = (userCases || []).find((c) => c.id === existingCaseIdToReuse)
+    return match?.case_number || "Existing Profile"
+  }, [existingCaseIdToReuse, selectedMember, userCases])
 
   const handleCategorySelect = (category: "person" | "claim") => {
     setSubmissionCategory(category)
@@ -195,9 +247,21 @@ export function NewCasePage() {
     try {
       let activeCase = createdCase
       if (!activeCase) {
-        const memberIdToSend = isIdentity && isHead ? selectedFamilyMemberId : null
-        activeCase = await createCase(values.caseType, token, memberIdToSend)
-        setCreatedCase(activeCase)
+        if (existingCaseIdToReuse) {
+          // Reuse existing identity profile bundle so cross-document consistency checks compare all documents!
+          activeCase = {
+            id: existingCaseIdToReuse,
+            case_number: existingCaseNumber || "Profile Bundle",
+            case_type: values.caseType,
+            status: "submitted",
+            created_at: new Date().toISOString(),
+          } as Case
+          setCreatedCase(activeCase)
+        } else {
+          const memberIdToSend = isIdentity && isHead ? selectedFamilyMemberId : null
+          activeCase = await createCase(values.caseType, token, memberIdToSend)
+          setCreatedCase(activeCase)
+        }
       }
       await uploadAll(activeCase.id)
     } catch (err) {
@@ -262,11 +326,15 @@ export function NewCasePage() {
               ) : allDone ? (
                 <div className="flex flex-col gap-4">
                   <div className="rounded-md border border-success/30 bg-success/10 px-4 py-3 text-sm">
-                    <p className="font-medium text-foreground">Case submitted successfully.</p>
+                    <p className="font-medium text-foreground">
+                      {existingCaseIdToReuse && !forceNewCase
+                        ? "Documents added to profile successfully."
+                        : "Case submitted successfully."}
+                    </p>
                     <p className="text-muted-foreground">
-                      Case ID: <span className="font-mono">{createdCase.case_number}</span>
+                      Profile / Case ID: <span className="font-mono">{createdCase.case_number}</span>
                       {" · "}
-                      {uploadedCount} document{uploadedCount === 1 ? "" : "s"} uploaded.
+                      {uploadedCount} document{uploadedCount === 1 ? "" : "s"} uploaded and ready for cross-comparison.
                     </p>
                     {selectedMember && (
                       <p className="text-xs text-primary font-medium mt-1.5 flex items-center gap-1.5">
@@ -435,21 +503,55 @@ export function NewCasePage() {
                       </button>
                     </div>
 
-                    {/* Person document checklist hint */}
+                    {/* Person document checklist hint & existing bundle notice */}
                     {submissionCategory === "person" && (
-                      <div className="rounded-lg border border-blue-200/80 bg-blue-50/50 p-3 mt-1 text-xs text-blue-900">
-                        <span className="font-semibold block mb-1">Typical documents to include:</span>
-                        <div className="flex flex-wrap gap-2 text-blue-800">
-                          <span className="inline-flex items-center gap-1 rounded bg-blue-100/70 px-2 py-0.5">
-                            ✓ Identity card
-                          </span>
-                          <span className="inline-flex items-center gap-1 rounded bg-blue-100/70 px-2 py-0.5">
-                            ✓ Address proof
-                          </span>
-                          <span className="inline-flex items-center gap-1 rounded bg-blue-100/70 px-2 py-0.5">
-                            ✓ Income certificate
-                          </span>
-                        </div>
+                      <div className="flex flex-col gap-2 mt-1">
+                        {existingCaseIdToReuse ? (
+                          <div className="rounded-xl border border-blue-300 bg-blue-50/80 p-3.5 text-xs text-blue-900 shadow-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold flex items-center gap-1.5 text-blue-950">
+                                <CheckCircle2Icon className="size-4 text-blue-600 shrink-0" />
+                                Connecting to your active profile ({existingCaseNumber})
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setForceNewCase(true)}
+                                className="text-[11px] font-medium text-blue-700 underline hover:text-blue-900 shrink-0"
+                              >
+                                Create separate bundle instead
+                              </button>
+                            </div>
+                            <p className="mt-1 text-blue-800 leading-relaxed text-[11.5px]">
+                              Any new document you upload (PAN, Aadhaar, Voter ID, Driving Licence, etc.) will be automatically added to this person's bundle. All your documents will be cross-analyzed together to detect inconsistencies in name, DOB, address, or parent names.
+                            </p>
+                          </div>
+                        ) : forceNewCase ? (
+                          <div className="rounded-xl border border-amber-300 bg-amber-50/80 p-3 text-xs text-amber-900 flex items-center justify-between">
+                            <span>Creating a fresh isolated profile bundle for this upload.</span>
+                            <button
+                              type="button"
+                              onClick={() => setForceNewCase(false)}
+                              className="text-[11px] font-semibold text-amber-800 underline hover:text-amber-950"
+                            >
+                              Reconnect to existing profile
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="rounded-lg border border-blue-200/80 bg-blue-50/50 p-3 text-xs text-blue-900">
+                            <span className="font-semibold block mb-1">Typical documents to include:</span>
+                            <div className="flex flex-wrap gap-2 text-blue-800">
+                              <span className="inline-flex items-center gap-1 rounded bg-blue-100/70 px-2 py-0.5">
+                                ✓ Identity card
+                              </span>
+                              <span className="inline-flex items-center gap-1 rounded bg-blue-100/70 px-2 py-0.5">
+                                ✓ Address proof
+                              </span>
+                              <span className="inline-flex items-center gap-1 rounded bg-blue-100/70 px-2 py-0.5">
+                                ✓ Income certificate
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

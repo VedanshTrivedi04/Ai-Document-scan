@@ -88,7 +88,7 @@ def choose_profile_value(
     case_id: uuid.UUID,
     field_name: str,
     payload: ProfileChoiceRequest,
-    actor: User = Depends(_reviewer),
+    actor: User = Depends(require_company_role(UserRole.user)),
     db: Session = Depends(get_tenant_db),
 ) -> dict[str, Any]:
     case = db.execute(
@@ -96,7 +96,18 @@ def choose_profile_value(
     ).scalar_one_or_none()
     if case is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
-    ensure_can_act(actor, case)
+
+    # Authorisation: Either a company reviewer (L1/L2) or the head of the family who submitted this case
+    is_reviewer = has_rank(actor.role, UserRole.reviewer_l1)
+    is_submitter_head = case.submitted_by_user_id == actor.id
+    if not is_reviewer and not is_submitter_head:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Only the family head or a company reviewer can choose profile values for this case.",
+        )
+    if is_reviewer:
+        ensure_can_act(actor, case)
+
     if not is_identity_case_type(case.case_type):
         raise HTTPException(status.HTTP_409_CONFLICT, _NOT_IDENTITY)
     if field_name not in PROFILE_FIELDS:

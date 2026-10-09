@@ -1019,10 +1019,14 @@ applicant), never those of an officer who signed it:
 script. `latin` the same name in Latin letters: a faithful letter-by-letter \
 transliteration when it is printed in another script, otherwise a copy of \
 `value`. Never translate a name and never "correct" its spelling. If the \
-document prints the name in two scripts, use the Latin one for `latin`.
+document prints the name in two scripts, use the Latin one for `latin`. \
+IMPORTANT FOR INDIAN PAN (tax identity) CARDS: The card prints two names above the DOB. \
+The FIRST name (e.g. "TWITTERPREET SINGH") is the cardholder's own name (full_name). \
+The SECOND name directly below it (e.g. "BALWINDER SINGH") is the Father's Name (parent_or_spouse_name). \
+Never confuse the two!
    - parent_or_spouse_name: the father's, mother's, husband's or guardian's \
 name as printed (after "S/O", "D/O", "W/O", "C/O", "Father's Name" and the \
-like), same value/latin shape. Do not include the "S/O" prefix itself.
+like, or the second name line on an Indian PAN card), same value/latin shape. Do not include the "S/O" prefix itself.
    - date_of_birth: normalized to ISO 8601 (YYYY-MM-DD) in `value`, original \
 text in `raw_text`. If only a year of birth is printed, leave `value` null \
 and put the year in `raw_text`.

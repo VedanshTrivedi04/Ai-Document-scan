@@ -35,10 +35,12 @@ export type NavItemId =
 
 // Who sees each item (the routes are separately guarded, and the backend
 // enforces the same limits — hiding the link is just a convenience).
-const NAV_VISIBLE: Record<NavItemId, (u: CurrentUser | undefined) => boolean> = {
+// For normal citizen users (user role): their primary workspace is "My family" and "My cases".
+// The company review queue ("Cases") is for corporate reviewers and company portals.
+const NAV_VISIBLE: Record<NavItemId, (u: CurrentUser | undefined, isOrg: boolean) => boolean> = {
   dashboard: (u) => !u?.is_platform_admin,
-  review_queue: () => true,
-  cases: () => true,
+  review_queue: (u, isOrg) => Boolean(u?.is_platform_admin) || hasRank(u?.role, "reviewer_l1") || isOrg,
+  cases: (u, isOrg) => Boolean(u?.is_platform_admin) || hasRank(u?.role, "reviewer_l1") || isOrg,
   my_cases: (u) => !u?.is_platform_admin,
   family: (u) => !u?.is_platform_admin,
   audit_history: (u) => Boolean(u?.is_platform_admin) || hasRank(u?.role, "reviewer_l1"),
@@ -100,7 +102,8 @@ export function Nav({ active, onNewUploadClick }: NavProps) {
     return () => window.removeEventListener("keydown", handleKey)
   }, [])
 
-  const visibleNavItems = NAV_ITEMS.filter((item) => NAV_VISIBLE[item.id](user))
+  const { isOrgSite } = useOrganisation()
+  const visibleNavItems = NAV_ITEMS.filter((item) => NAV_VISIBLE[item.id](user, Boolean(isOrgSite)))
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200/90 bg-white/95 backdrop-blur-md px-3 sm:px-6 py-2.5 transition-all">

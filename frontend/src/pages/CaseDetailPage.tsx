@@ -8,15 +8,20 @@ import {
   FileTextIcon,
   GlobeIcon,
   ShieldCheckIcon,
+  UploadCloudIcon,
   UsersIcon,
+  PlusIcon,
+  Loader2Icon,
 } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { getCase, getCaseAuditLog, getSignatureMatches } from "@/api/cases"
+import { getCase, getCaseAuditLog, getSignatureMatches, uploadDocument } from "@/api/cases"
 import { getCatalog, getLanguages } from "@/api/i18n"
 import { getCaseProfile } from "@/api/profiles"
 import { useAuth } from "@/hooks/useAuth"
+import { useOrganisation } from "@/hooks/useOrganisation"
+import { Button } from "@/components/ui/button"
 import { Nav } from "@/design-system/Nav"
 import { InfoChip } from "@/design-system/InfoChip"
 import { SeverityFinding } from "@/design-system/SeverityFinding"
@@ -111,6 +116,7 @@ export function CaseDetailPage() {
     }
   }, [currentLang])
 
+  const { isOrgSite } = useOrganisation()
   const isReady = Boolean(caseId && token)
   // Submitters never receive their own case's risk tier/score/reasons (the
   // backend withholds them); the risk cards are reviewer/admin-only.
@@ -119,6 +125,12 @@ export function CaseDetailPage() {
   const isSupportView = isPlatformAdmin(user?.role)
   const isReviewerRole = hasRank(user?.role, "reviewer_l1") || isSupportView
   const canExport = hasRank(user?.role, "reviewer_l1")
+
+  // For normal citizen portal (localhost / non-org):
+  // The submitter acts as the family head. They can review and resolve profile choices for their family members,
+  // while the corporate reviewer decision panel (approve/reject/escalate) is hidden.
+  const isFamilyHead = Boolean(user && caseDetail?.submitted_by?.id === user.id)
+  const shouldShowReviewerPanel = Boolean(isOrgSite || isReviewerRole)
 
   // Available languages from GET /i18n/languages (public)
   const { data: languages = [] } = useQuery({
@@ -213,12 +225,36 @@ export function CaseDetailPage() {
   const viewerUrl =
     activeDoc && viewerFile?.docId === activeDoc.id ? viewerFile.url : activeDoc?.file_url
 
-  const [selectedBox, setSelectedBox] = React.useState<BoundingBox | null>(null)
+  const queryClient = useQueryClient()
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null)
+  const [uploadError, setUploadError] = React.useState<string | null>(null)
 
-  // Reset selected box whenever active document changes
-  React.useEffect(() => {
-    setSelectedBox(null)
-  }, [selectedDocIndex])
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (!caseId || !token) throw new Error("Missing case ID or token")
+      return uploadDocument(caseId, file, token)
+    },
+    onSuccess: () => {
+      setUploadError(null)
+      void queryClient.invalidateQueries({ queryKey: ["case", caseId] })
+      void queryClient.invalidateQueries({ queryKey: ["caseProfile", caseId] })
+      void queryClient.invalidateQueries({ queryKey: ["cases"] })
+      void queryClient.invalidateQueries({ queryKey: ["family"] })
+    },
+    onError: (err: any) => {
+      setUploadError(err?.message || "Failed to upload document")
+    },
+  })
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      uploadMutation.mutate(file)
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
 
   const isIdentity = isIdentityCase(caseDetail?.case_type) || activeDoc?.extracted_fields?.schema === "identity"
 
@@ -281,11 +317,11 @@ export function CaseDetailPage() {
 
       <section className="px-3.5 sm:px-6 pt-4 sm:pt-5 pb-3 max-w-[1680px] w-full mx-auto">
         <Link
-          to="/cases"
+          to={!isOrgSite && !isReviewerRole ? (isIdentity ? "/family" : "/my-cases") : "/cases"}
           className="inline-flex items-center space-x-1.5 text-xs font-semibold text-slate-500 hover:text-blue-600 transition-colors mb-2"
         >
           <ChevronLeftIcon className="w-3.5 h-3.5" />
-          <span>Back to queue</span>
+          <span>{!isOrgSite && !isReviewerRole ? (isIdentity ? "Back to family" : "Back to my cases") : "Back to queue"}</span>
         </Link>
 
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -408,8 +444,46 @@ export function CaseDetailPage() {
                       </button>
                     )
                   })}
+
+                  {/* Add another document to this person's bundle */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                    accept=".pdf,.png,.jpg,.jpeg,.tiff"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={uploadMutation.isPending}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="h-8.5 px-3 text-xs font-semibold shrink-0 gap-1.5 border-dashed border-primary/40 text-primary hover:bg-primary/5 hover:border-primary transition"
+                  >
+                    {uploadMutation.isPending ? (
+                      <>
+                        <Loader2Icon className="size-3.5 animate-spin" />
+                        <span>Uploading…</span>
+                      </>
+                    ) : (
+                      <>
+                        <PlusIcon className="size-3.5" />
+                        <span>+ Add document to profile</span>
+                      </>
+                    )}
+                  </Button>
                 </div>
               </div>
+
+              {uploadError && (
+                <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive flex items-center justify-between">
+                  <span>{uploadError}</span>
+                  <button type="button" onClick={() => setUploadError(null)} className="font-bold underline text-[11px]">
+                    Dismiss
+                  </button>
+                </div>
+              )}
 
               {/* Document Header & Viewer */}
               {!activeDoc ? (
@@ -549,7 +623,7 @@ export function CaseDetailPage() {
                   profile={caseProfile}
                   isLoading={isProfileLoading}
                   caseId={caseId!}
-                  canAct={caseDetail?.can_act}
+                  canAct={caseDetail?.can_act || isFamilyHead}
                   caseStatus={caseDetail?.status}
                   documents={documents}
                   catalog={catalog}
@@ -579,7 +653,7 @@ export function CaseDetailPage() {
                 token={token}
               />
 
-              {caseDetail && token && (
+              {caseDetail && token && shouldShowReviewerPanel && (
                 <CaseDecisionPanel caseDetail={caseDetail} role={user?.role} token={token} />
               )}
             </div>
@@ -928,7 +1002,9 @@ export function CaseDetailPage() {
                 </div>
                 )}
 
-                {caseDetail && token && <CaseDecisionPanel caseDetail={caseDetail} role={user?.role} token={token} />}
+                {caseDetail && token && shouldShowReviewerPanel && (
+                  <CaseDecisionPanel caseDetail={caseDetail} role={user?.role} token={token} />
+                )}
 
                 {isReviewerRole && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col flex-1 min-w-0">

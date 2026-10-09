@@ -25,6 +25,12 @@ services:
       - "8000:8000"
     volumes:
       - app_storage:/app/local_storage
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/health\")'"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
     depends_on:
       redis:
         condition: service_healthy
@@ -58,7 +64,7 @@ services:
       - "${FRONTEND_PORT:-80}:80"
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
     develop:
       watch:
         # Rebuild and reload the frontend Nginx bundle when source files change

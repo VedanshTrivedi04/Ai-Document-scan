@@ -677,3 +677,79 @@ themselves.
   in the Default Company unless a platform admin moves them.
 - Password reset is still done by a platform admin (no email-based reset was
   added). This is a known limitation.
+
+---
+
+## 17. Citizen Self-Review & Company Reviewer Separation (added 9 October 2026)
+
+### Why it was changed
+
+Previously, every case (even personal/family identity bundles submitted by a
+normal citizen on `localhost`) displayed the corporate `CaseDecisionPanel`
+("Review status: Your case is with the review team", plus Approve/Reject/Escalate
+buttons). Furthermore, when documents in an identity case had contradictory details
+(e.g. name or DOB mismatch), resolving the disputed value via
+`PUT /cases/{id}/profile/{field_name}` strictly required a corporate `reviewer_l1`
+or `reviewer_l2` role, meaning ordinary citizens/family heads could not resolve
+their own household discrepancies.
+
+### What was built
+
+1. **Backend Profile Resolution Permissions** (`backend/app/api/profiles.py`):
+   - `PUT /cases/{case_id}/profile/{field_name}` updated to allow either:
+     - A corporate reviewer (`has_rank(actor.role, 'reviewer_l1')`), OR
+     - The **Family Head / Submitter** (`case.submitted_by_user_id == actor.id`).
+   - Normal citizens can now choose and resolve contradictory profile fields for
+     their own cases and family members without needing a corporate reviewer.
+
+2. **Frontend Reviewer Controls Cleanup** (`frontend/src/pages/CaseDetailPage.tsx`):
+   - **`CaseDecisionPanel` hidden for regular citizens:** The corporate review
+     actions (Approve/Reject/Escalate and "Waiting for review team" banner) are now
+     only displayed when on a corporate organisation subdomain (`isOrgSite`) or
+     when the logged-in user possesses a corporate reviewer role (`reviewer_l1`/`reviewer_l2`).
+   - **Family Head Enabled:** `VerifiedProfilePanel` receives `canAct = caseDetail?.can_act || isFamilyHead`.
+     Family Heads can click "Use this" / "Change" to pick the authoritative document
+     when conflicts arise across identity proofs.
+   - **Breadcrumb Navigation:** On citizen identity cases, the top link navigates
+     directly to `Back to family` (`/family`) or `Back to my cases` (`/my-cases`)
+     instead of the corporate reviewer queue.
+
+3. **Navigation Bar Scoping** (`frontend/src/design-system/Nav.tsx`):
+   - For regular citizens on `localhost`: Primary navigation links are **"My family"**,
+     **"My cases"**, and **"Dashboard"**.
+   - The company review queue link (**"Cases"**) is scoped to corporate reviewers
+     and users accessing via company subdomains.
+
+---
+
+## 18. Profile-Centric Document Appending & Cross-Document Verification (added 9 October 2026)
+
+### Why it was changed
+
+Previously, whenever a citizen user navigated to `/cases/new` (or clicked "New upload")
+to upload an additional document (e.g. uploading a PAN card after previously uploading an Aadhaar card),
+the submission form invoked `createCase(...)` which generated an isolated new `Case` record each time.
+Because cross-document contradiction checks only execute across documents sharing the *same* case ID
+(`Document.case_id == Case.id`), having one document per case meant cross-document analysis never executed,
+preventing the system from flagging inconsistencies between Aadhaar, PAN, voter cards, etc.
+
+### What was built
+
+1. **Automatic Bundle Connection in Intake** (`frontend/src/pages/NewCasePage.tsx`):
+   - When a citizen or family head submits person documents (`submissionCategory === "person"` and
+     `case_type === "identity_verification"`), the page detects if an active identity case already exists
+     for that person (from `selectedMember.latest_case_id`, `familyData` self member, or `listCases`).
+   - If an existing profile bundle exists, the upload attaches directly to that existing case ID instead
+     of creating a duplicate disconnected case.
+   - A clear banner notifies the citizen: *"Connecting to your active profile (CASE-XXXX). Any new document
+     you upload will be automatically added to this person's bundle. All your documents will be cross-analyzed
+     together to detect inconsistencies in name, DOB, address, or parent names."*
+   - Citizens can still click *"Create separate bundle instead"* if they explicitly wish to isolate a profile.
+
+2. **In-Profile Direct Upload Tab** (`frontend/src/pages/CaseDetailPage.tsx`):
+   - A dedicated `+ Add document to profile` button on the document tab bar allows citizens to directly
+     upload further credentials (PAN, Aadhaar, Driving Licence, etc.) straight into their bundle.
+   - When a new document finishes processing, Celery task `run_cross_document_checks` triggers across all
+     completed documents in the case, comparing names, dates of birth, addresses, and ID numbers.
+
+
