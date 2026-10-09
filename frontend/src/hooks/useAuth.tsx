@@ -84,23 +84,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient])
 
   const value = React.useMemo(
-    () => ({
-      token: "mock-token",
-      user: {
-        id: "1",
-        email: "test@example.com",
-        full_name: "Test User",
-        role: "platform_admin" as const,
-        role_label: "Platform Admin",
-        is_active: true,
-        is_platform_admin: true,
-        company_id: "1",
-        company_name: "Test Company"
-      } as any,
-      isLoadingUser: false,
-      login, register, logout
-    }),
-    [login, register, logout]
+    () => ({ token, user, isLoadingUser: Boolean(token) && isLoadingUser, login, register, logout }),
+    [token, user, isLoadingUser, login, register, logout]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

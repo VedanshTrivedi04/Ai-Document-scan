@@ -208,7 +208,7 @@ def test_report_has_the_nine_sections_in_order_under_the_fddt_name(db_session, f
     assert positions == sorted(positions), "sections out of order"
 
     # product name comes from the single constant, on every page's header + metadata
-    assert APP_NAME == "DocSure" and APP_FULL_NAME == "AI Document Authentication Platform"
+    assert APP_NAME == "Docsure" and APP_FULL_NAME == "AI Document Authentication Platform"
     for page in pdf:
         assert APP_NAME in page.get_text() and APP_FULL_NAME in page.get_text()
     assert APP_NAME in pdf.metadata["title"]

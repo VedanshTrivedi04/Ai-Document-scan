@@ -45,8 +45,17 @@ server {
         default_type application/javascript;
     }
 
+    # Hashed static assets can be cached aggressively
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
     # Single-page app: unknown paths fall back to index.html.
+    # index.html must not be cached so browser always picks up new releases.
     location / {
-        try_files $uri /index.html;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files $uri $uri/ /index.html;
     }
 }

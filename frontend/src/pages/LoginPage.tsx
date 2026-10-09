@@ -80,7 +80,7 @@ export function LoginPage() {
   // Language management
   const [currentLang, setCurrentLang] = React.useState<string>(() => {
     try {
-      return localStorage.getItem("docsure_lang") || "en"
+      return localStorage.getItem("docsure_lang") || localStorage.getItem("agnitia_lang") || "en"
     } catch {
       return "en"
     }
@@ -112,10 +112,10 @@ export function LoginPage() {
   })
 
   // Already authenticated — don't show the login form again.
-  // if (token && !redirectPrompt) {
-  //   const from = (location.state as { from?: string } | null)?.from ?? "/"
-  //   return <Navigate to={from} replace />
-  // }
+  if (token && !redirectPrompt) {
+    const from = (location.state as { from?: string } | null)?.from ?? "/cases"
+    return <Navigate to={from} replace />
+  }
 
   const onSignIn = async (values: LoginFormValues) => {
     setFormError(null)

@@ -16,7 +16,7 @@ from pydantic import Field
 # templates). Display-level only: internal identifiers (the `docauth`
 # database/user, docker container names, the localStorage token key, Python
 # package and folder names) deliberately keep their original names.
-APP_NAME = "DocSure"
+APP_NAME = "Docsure"
 APP_FULL_NAME = "AI Document Authentication Platform"
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

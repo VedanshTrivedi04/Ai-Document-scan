@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { motion } from "framer-motion"
-import { ArrowRight, Shield, Search, FileText, Menu, X, CheckCircle2, FileSearch, ArrowDownToLine, Zap, LayoutDashboard } from "lucide-react"
+import { ArrowRight, Shield, Search, Menu, X, CheckCircle2, Zap } from "lucide-react"
 import { ReactLenis } from "lenis/react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"

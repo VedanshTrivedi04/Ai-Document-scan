@@ -103,7 +103,7 @@ export function CaseDetailPage() {
   const [detailsView, setDetailsView] = React.useState<"profile" | "document">("profile")
   const [currentLang, setCurrentLang] = React.useState<string>(() => {
     try {
-      return localStorage.getItem("docsure_lang") || "en"
+      return localStorage.getItem("docsure_lang") || localStorage.getItem("agnitia_lang") || "en"
     } catch {
       return "en"
     }

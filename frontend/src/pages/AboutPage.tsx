@@ -117,7 +117,7 @@ export const AboutPage = () => {
             ].map((value, i) => (
               <div key={i} className="bg-gray-800/50 border border-gray-700 p-10 rounded-3xl hover:bg-gray-800 transition-colors">
                 <div className="w-14 h-14 bg-gray-700 rounded-2xl flex items-center justify-center text-blue-400 mb-6">
-                  {React.cloneElement(value.icon as React.ReactElement, { className: "w-7 h-7" })}
+                  {React.cloneElement(value.icon as React.ReactElement<any>, { className: "w-7 h-7" })}
                 </div>
                 <h3 className="text-2xl font-bold mb-4 text-white">{value.title}</h3>
                 <p className="text-gray-400 leading-relaxed font-medium">{value.desc}</p>
