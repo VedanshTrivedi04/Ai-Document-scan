@@ -1533,5 +1533,5 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Commit: Pending
-- Push: Pending
+- Commit: 7d35344 (fix: replace ConversationHandler with top-level media handlers to prevent dropped uploads)
+- Push: Successful (origin/feat/telegram-chatbot)
