@@ -3,7 +3,7 @@ import { FileIcon, UploadCloudIcon, XIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { ACCEPTED_UPLOAD_TYPES, formatFileSize } from "@/lib/uploadLimits"
+import { ACCEPTED_UPLOAD_TYPES_STRING, formatFileSize } from "@/lib/uploadLimits"
 import { cn } from "@/lib/utils"
 
 export interface FileWithProgress {
@@ -32,7 +32,7 @@ export function FileDropzone({
   onFileRemoved,
   disabled,
   maxFileBytes = null,
-  acceptedTypes = ACCEPTED_UPLOAD_TYPES,
+  acceptedTypes = ACCEPTED_UPLOAD_TYPES_STRING,
   hintText,
 }: FileDropzoneProps) {
   const inputRef = React.useRef<HTMLInputElement>(null)
