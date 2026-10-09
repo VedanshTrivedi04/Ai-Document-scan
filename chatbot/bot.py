@@ -1,7 +1,12 @@
 """
 bot.py: Sarthi Public Assistant - Citizen Document Contradiction Telegram Bot.
-Handles single documents, multiple uploads, Telegram albums, and /demo bundle tests.
-Directly powered by backend services: identity_comparison and identity_messages.
+Handles:
+- Single documents & multiple photo uploads / albums
+- Live OCR/Field extraction preview (Phase 1)
+- Deep cross-document contradiction check (Phase 2)
+- Official resolution precedence & empathetic citizen advice (Phase 3)
+- Document quality & tampering pre-check (Phase 4)
+- Citizen commands: /start, /demo, /scheme, /profile, /help, /cancel (Phase 5)
 """
 
 import asyncio
@@ -27,7 +32,12 @@ from verification_client import (
     extract_document_fields,
     get_document_preview_summary,
 )
-from explainer import format_citizen_report
+from quality_checker import check_document_quality
+from explainer import (
+    format_citizen_report,
+    format_scheme_eligibility,
+    format_verified_profile,
+)
 
 # Enable logging
 logging.basicConfig(
@@ -45,6 +55,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     """Welcomes the citizen and begins document bundle collection."""
     user = update.effective_user
     context.user_data["doc_paths"] = []
+    context.user_data["quality_warnings"] = []
     
     pending = context.user_data.get("debounce_task")
     if pending and not pending.done():
@@ -54,12 +65,16 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         f"🙏 *Namaste {user.first_name} ji!*\n\n"
         "Main hoon *Sarthi AI* — aapka Citizen Document Verification Assistant.\n\n"
         "Sarkari form (PM Awas, Scholarship, Ration Card, etc.) bharne se pehle "
-        "apne dastavejon ke *Bundle (2 se 5 documents)* ki aapas me jaanch karwayein.\n\n"
+        "apne dastavejon ke *Bundle (2 se 5 documents)* ki aapas me jaanch karwayein taaki form reject na ho.\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "📄 *Documents Bhejiye:*\n"
-        "Aap ek-ek karke ya *ek sath select karke multiple photos* bhej sakte hain "
-        "(Aadhaar, PAN, Income Certificate, Ration Card, Address proof).\n\n"
-        "💡 *Tip:* Test bundle dekhne ke liye type karein `/demo`"
+        "📄 *Dastavej Bhejiye:*\n"
+        "Aap ek-ek karke ya *ek sath select karke photos/PDFs* bhej sakte hain:\n"
+        "• Aadhaar Card\n"
+        "• PAN Card\n"
+        "• Income Certificate\n"
+        "• Ration Card / Voter ID / Address Proof\n\n"
+        "💡 *Test Demo Bundles:* `/demo T01`, `/demo T05`, `/demo B07`\n"
+        "ℹ️ *Commands:* `/help`, `/scheme`, `/profile`"
     )
 
     await update.message.reply_text(
@@ -70,13 +85,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     return COLLECTING_DOCS
 
 async def demo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Allows testing any of the 16 backend synthetic test bundles."""
+    """Allows testing any of the 14 test cards or 16 backend synthetic test bundles."""
     args = context.args
-    bundle_id = args[0] if args else "B07"
+    bundle_id = args[0] if args else "T05"
 
     await update.message.reply_text(
         f"⏳ *Backend Contradiction Engine Chal Raha Hai...*\n"
-        f"_Bundle ID: {bundle_id.upper()}_",
+        f"_Test Case: {bundle_id.upper()}_",
         parse_mode=ParseMode.MARKDOWN
     )
 
@@ -97,9 +112,11 @@ async def demo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
+    # Cache for scheme and profile commands
+    context.user_data["last_result"] = result
+    title = result.get("bundle_title") or f"Test Case {bundle_id.upper()}"
     report = format_citizen_report(result)
-    title = result.get("bundle_title", "")
-    await update.message.reply_text(f"📌 *Test Case: {title}*\n\n" + report, parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(f"📌 *{title}*\n\n" + report, parse_mode=ParseMode.MARKDOWN)
 
 async def handle_document_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Collects incoming documents, buffering multi-photo albums cleanly."""
@@ -118,6 +135,12 @@ async def handle_document_upload(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text("⚠️ Kripya document ki saaf photo ya image file bhejiye.")
         return COLLECTING_DOCS
 
+    # Phase 4 Quality Check
+    q_res = check_document_quality(saved_path)
+    q_warnings = context.user_data.setdefault("quality_warnings", [])
+    if q_res.get("warnings"):
+        q_warnings.extend(q_res["warnings"])
+
     doc_paths.append(saved_path)
     context.user_data["doc_paths"] = doc_paths
     count = len(doc_paths)
@@ -132,31 +155,42 @@ async def handle_document_upload(update: Update, context: ContextTypes.DEFAULT_T
     return COLLECTING_DOCS
 
 async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Waits briefly for all photos sent in a batch, then replies cleanly once."""
+    """Waits briefly for all photos sent in a batch, then replies cleanly once with previews."""
     try:
         await asyncio.sleep(ALBUM_DEBOUNCE_SECONDS)
     except asyncio.CancelledError:
         return
 
     doc_paths = context.user_data.get("doc_paths", [])
+    q_warnings = context.user_data.get("quality_warnings", [])
     count = len(doc_paths)
 
     # Phase 1: Real Live Extraction Preview for Citizen
     extracted_previews = []
+    extracted_docs = []
     for idx, path in enumerate(doc_paths):
         try:
             bdoc = extract_document_fields(path, idx + 1)
+            extracted_docs.append(bdoc)
             extracted_previews.append(get_document_preview_summary(bdoc, idx + 1))
         except Exception as e:
             logger.error(f"Error extracting preview for doc {idx+1}: {e}")
             extracted_previews.append(f"📄 *Dastavej {idx+1}:* Prapt hua")
 
+    context.user_data["extracted_docs"] = extracted_docs
     docs_preview_text = "\n\n".join(extracted_previews)
+
+    quality_banner = ""
+    if q_warnings:
+        # Show top 2 distinct warnings
+        distinct_warns = list(dict.fromkeys(q_warnings))[:2]
+        quality_banner = "\n\n🔍 *Quality Notice:*\n" + "\n".join(f"  {w}" for w in distinct_warns)
 
     if count >= MAX_DOCS:
         await update.message.reply_text(
             f"✅ *Sabhi {MAX_DOCS} dastavej prapt aur scan ho gaye!*\n\n"
-            f"{docs_preview_text}\n\n"
+            f"{docs_preview_text}"
+            f"{quality_banner}\n\n"
             "⏳ *Cross-document contradiction jaanch shuru ki ja rahi hai...*",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=ReplyKeyboardRemove(),
@@ -169,7 +203,8 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         msg = (
             f"✅ *Kul {count} Dastavej Prapt Aur Scan Ho Gaye!*\n\n"
-            f"{docs_preview_text}\n\n"
+            f"{docs_preview_text}"
+            f"{quality_banner}\n\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"📊 Bundle: *{count}/{MAX_DOCS} documents*\n\n"
             "👉 Aap chahein toh aur bhi documents bhej sakte hain,\n"
@@ -179,7 +214,8 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
         reply_markup = ReplyKeyboardRemove()
         msg = (
             f"✅ *Pehla Dastavej Prapt Aur Scan Ho Gaya!*\n\n"
-            f"{docs_preview_text}\n\n"
+            f"{docs_preview_text}"
+            f"{quality_banner}\n\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "📄 Kripya doosra dastavej (jaise PAN Card ya Income Certificate) bhejiye "
             "taaki cross-verification kiya ja sake."
@@ -216,6 +252,9 @@ async def _trigger_verification(update: Update, context: ContextTypes.DEFAULT_TY
         result_data = await verify_documents(doc_paths)
         report_text = format_citizen_report(result_data)
 
+        # Cache for /scheme and /profile
+        context.user_data["last_result"] = result_data
+
         await processing_msg.delete()
         await update.message.reply_text(report_text, parse_mode=ParseMode.MARKDOWN)
     except Exception as e:
@@ -224,34 +263,77 @@ async def _trigger_verification(update: Update, context: ContextTypes.DEFAULT_TY
             "❌ Dastavejon ki jaanch me takneeki samasya aayi. Kripya thodi der baad `/start` karke dobara koshish karein."
         )
 
+async def scheme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Evaluates welfare scheme readiness (PM Awas, PM Kisan, Scholarship)."""
+    last_res = context.user_data.get("last_result")
+    extracted_docs = context.user_data.get("extracted_docs", [])
+
+    if not last_res and not extracted_docs:
+        await update.message.reply_text(
+            "⚠️ Yojana eligibility jaanch ke liye pehle apne dastavej check karwayein.\n"
+            "Shuru karne ke liye `/start` type karein ya demo dekhne ke liye `/demo T01` type karein.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    text = format_scheme_eligibility(last_res or {}, extracted_docs)
+    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays the consolidated verified digital profile."""
+    extracted_docs = context.user_data.get("extracted_docs", [])
+
+    if not extracted_docs:
+        # Check if doc_paths exist
+        doc_paths = context.user_data.get("doc_paths", [])
+        if doc_paths:
+            extracted_docs = [extract_document_fields(p, i+1) for i, p in enumerate(doc_paths)]
+            context.user_data["extracted_docs"] = extracted_docs
+
+    if not extracted_docs:
+        await update.message.reply_text(
+            "⚠️ Koi dastavej scan nahi hua hai. Pehle `/start` type karke photo upload karein.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    text = format_verified_profile(extracted_docs)
+    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Cancels the bundle check."""
+    """Cancels the bundle check and resets session."""
     pending = context.user_data.get("debounce_task")
     if pending and not pending.done():
         pending.cancel()
     context.user_data.clear()
 
     await update.message.reply_text(
-        "Jaanch raddh (cancel) kar di gayi hai. Dobara shuru karne ke liye `/start` type karein.",
+        "Jaanch raddh (cancel) kar di gayi hai. Naya session shuru karne ke liye `/start` type karein.",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=ReplyKeyboardRemove(),
     )
     return ConversationHandler.END
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Usage help."""
+    """Usage help and instructions."""
     help_text = (
-        "ℹ️ *Sarthi Bundle Verifier Guide:*\n\n"
-        "1. `/start` dabayein aur documents bhejte jayein.\n"
-        "2. Multiple photos ek sath bhi select karke bhej sakte hain!\n"
+        "ℹ️ *SARTHI CITIZEN ASSISTANT GUIDE:*\n\n"
+        "1. `/start` — Naya document bundle upload shuru karein.\n"
+        "2. Multiple photos ek sath select karke bhej sakte hain!\n"
         "3. Button dabayein: *'🔍 Jaanch Shuru Karein'*\n\n"
+        "🏛️ *Yojana & Profile:*\n"
+        "• `/scheme` — Sarkari Yojana (PM Awas, PM Kisan, Scholarship) eligibility check\n"
+        "• `/profile` — Satypit Golden Profile card dekhein\n\n"
         "💡 *Backend Demo Bundles:*\n"
-        "Aap kisi bhi test case ko direct check kar sakte hain:\n"
-        "• `/demo B01` - All documents clean\n"
-        "• `/demo B02` - Spelling variants & address\n"
-        "• `/demo B05` - Hindi transliteration\n"
-        "• `/demo B07` - Date of Birth conflict\n"
-        "• `/demo B10` - Income difference"
+        "Aap bina upload kiye bhi instant test cases run kar sakte hain:\n"
+        "• `/demo T01` — All clean (Aadhaar + PAN match)\n"
+        "• `/demo T02` — Initial & birth year variation\n"
+        "• `/demo T05` — 15-year DOB discrepancy\n"
+        "• `/demo T07` — Harmless spelling variants\n"
+        "• `/demo T11` — Income certificate gap\n"
+        "• `/demo B01` — PDF clean bundle\n"
+        "• `/demo B07` — PDF DOB year conflict\n\n"
+        "🔄 `/cancel` — Current upload raddh karein"
     )
     await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
 
@@ -302,11 +384,16 @@ def main():
                 MessageHandler(filters.PHOTO | filters.Document.ALL, handle_document_upload),
             ],
         },
-        fallbacks=[CommandHandler("cancel", cancel_command)],
+        fallbacks=[
+            CommandHandler("cancel", cancel_command),
+            CommandHandler("clear", cancel_command),
+        ],
     )
 
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("demo", demo_command))
+    app.add_handler(CommandHandler("scheme", scheme_command))
+    app.add_handler(CommandHandler("profile", profile_command))
     app.add_handler(conv_handler)
 
     print("✅ Bot is online and directly connected to backend engine!")
