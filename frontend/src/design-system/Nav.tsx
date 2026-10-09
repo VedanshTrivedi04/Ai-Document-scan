@@ -85,7 +85,7 @@ export function Nav({ active, onNewUploadClick }: NavProps) {
 
   const handleSignOut = React.useCallback(() => {
     logout()
-    navigate("/login", { replace: true })
+    navigate("/", { replace: true })
   }, [logout, navigate])
 
   // Close mobile drawer when route changes
