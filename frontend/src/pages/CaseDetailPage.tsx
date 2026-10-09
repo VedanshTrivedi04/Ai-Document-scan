@@ -18,6 +18,7 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { deleteCase, getCase, getCaseAuditLog, getSignatureMatches, uploadDocument } from "@/api/cases"
+import { SignatureReferenceBar } from "@/components/case/SignatureReferenceBar"
 import { getCatalog, getLanguages } from "@/api/i18n"
 import { getCaseProfile } from "@/api/profiles"
 import { useAuth } from "@/hooks/useAuth"
@@ -584,6 +585,17 @@ export function CaseDetailPage() {
                     Dismiss
                   </button>
                 </div>
+              )}
+
+              {caseId && token && (
+                <SignatureReferenceBar
+                  caseId={caseId}
+                  token={token}
+                  canAct={!!caseDetail?.can_act}
+                  documents={documents}
+                  activeDoc={activeDoc}
+                  referenceDocumentId={caseDetail?.signature_reference_document_id}
+                />
               )}
 
               {/* Document Header & Viewer */}

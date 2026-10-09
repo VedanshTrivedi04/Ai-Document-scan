@@ -122,6 +122,11 @@ class Case(TenantScopedMixin, UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Identity cases: which document a reviewer chose as the right one for a
     # detail the documents dispute (app/services/person_profile.py).
     # {field_name: {document_id, chosen_by_user_id, chosen_at}}
+    # Identity cases: the document whose signature the others are compared with
+    # (app/services/signature_local.py), chosen by a reviewer.
+    # A plain id, not a foreign key: a second cases->documents key would make
+    # the Case.documents relationship ambiguous. Documents are never deleted.
+    signature_reference_document_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     profile_overrides: Mapped[dict | None] = mapped_column(
         JSONB().with_variant(JSON(), "sqlite"), nullable=True
     )

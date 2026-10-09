@@ -119,4 +119,5 @@ backend/tests/regression/_cache/
 backend/local_storage/
 backend/tessdata/
 backend/models/
+backend/models.zip
 *.onnx

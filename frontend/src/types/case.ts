@@ -313,6 +313,10 @@ export interface IdentityExtractedFields {
   identity_fields: IdentityFields
   core_fields: CoreFields
   additional_fields: ExtractedAdditionalField[]
+  // Photographs and handwritten signatures found on the document (places only;
+  // the server keeps the biometric/ink data to itself).
+  faces?: { status: string; items: { bounding_box: BoundingBox }[] }
+  signatures?: { status: string; items: { bounding_box: BoundingBox; ink?: number }[] }
 }
 
 export type ExtractedFields = InvoiceExtractedFields | IdentityExtractedFields
@@ -552,6 +556,7 @@ export const IDENTITY_FIELD_LABELS: Record<string, string> = {
   issuing_authority: "Issued by",
   issue_date: "Issue date",
   photo: "Photograph",
+  signature: "Signature",
 }
 
 export interface CrossDocumentRegion extends FieldRegion {
@@ -677,6 +682,8 @@ export interface CaseDetail extends CaseListItem {
    * a reviewer, the head of the case's family, or the submitter of a case outside any family. */
   can_manage?: boolean
   family_member?: CaseFamilyMember | null
+  // The document a reviewer chose as the reference for signature comparison.
+  signature_reference_document_id?: string | null
   documents: CaseDetailDocument[]
   forensic_findings: ForensicFinding[]
   cross_document_findings: CrossDocumentFinding[]

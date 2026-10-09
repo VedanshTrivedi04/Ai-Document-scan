@@ -363,9 +363,9 @@ export function IdentityFindingsPanel({
     findingCounts?.conflict_confirmed ??
     findings.filter((f) => f.resolution === "conflict_confirmed").length
 
-  const noIssueCount =
-    findingCounts?.no_issue ??
-    conflicts.filter((f) => f.resolution === "no_issue").length
+  // Conflicts a reviewer dismissed. (findingCounts.no_issue also counts the differences the
+  // check itself judged harmless, which are shown separately below.)
+  const noIssueCount = conflicts.filter((f) => f.resolution === "no_issue").length
 
   const harmlessCount =
     findingCounts?.ignored_as_harmless ??

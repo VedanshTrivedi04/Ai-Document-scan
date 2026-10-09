@@ -348,6 +348,8 @@ class CaseDetail(CaseListItem):
         "findings: a company reviewer, the head of the case's family, or the submitter of a case outside any family.",
     )
     family_member: CaseFamilyMember | None = None
+    # The document a reviewer chose as the reference for signature comparison.
+    signature_reference_document_id: uuid.UUID | None = None
     documents: list[CaseDocumentSummary]
     cross_document_findings: list[CrossDocumentFindingSummary]
     finding_counts: FindingCounts = FindingCounts()

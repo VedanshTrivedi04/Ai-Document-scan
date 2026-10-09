@@ -27,6 +27,7 @@ FIELD_LABELS = {
     "annual_income": "Annual income",
     "id_number": "Identity number",
     "photo": "Photograph",
+    "signature": "Signature",
 }
 
 DOCUMENT_LABELS = {
@@ -60,6 +61,10 @@ SUMMARY_HARMLESS = "{field} is written differently: {a} on the {doc_a} and {b} o
 # The photographs on two documents (app/services/face_service.py) have no text to quote.
 SUMMARY_PHOTO_CONFLICT = "The photograph on the {doc_a} does not look like the photograph on the {doc_b}."
 SUMMARY_PHOTO_UNCERTAIN = "The photograph on the {doc_a} could not be matched with the one on the {doc_b}."
+SUMMARY_SIG_CONFLICT = "The signature on the {doc_b} does not look like the reference signature on the {doc_a}."
+SUMMARY_SIG_UNCERTAIN = "The signature on the {doc_b} could not be matched with the reference signature on the {doc_a}."
+SUMMARY_SIG_MATCH = "The signature on the {doc_b} looks like the reference signature on the {doc_a}."
+SUMMARY_SIG_ABSENT = "No signature was found on the {doc_b}, so it was not compared with the reference signature on the {doc_a}."
 SUMMARY_PHOTO_MATCH = "The photograph on the {doc_a} and the one on the {doc_b} show the same person."
 
 HARMLESS_REASONS = {
@@ -71,6 +76,8 @@ HARMLESS_REASONS = {
     "extra_middle_name": "One document leaves out a middle name.",
     "address_formatting": "Only the way the address is written differs.",
     "photo_match": "The faces look alike.",
+    "signature_match": "The two signatures look alike.",
+    "signature_absent": "This document carries no signature to compare. That is not a difference.",
 }
 _HARMLESS_FALLBACK = "The two mean the same."
 
@@ -90,6 +97,8 @@ CONFLICT_REASONS = {
     "unclear_reading": (
         "A value on one of the documents could not be read clearly, so this may be a misreading and not a real difference."
     ),
+    "signature_mismatch": "The two signatures look clearly different.",
+    "signature_uncertain": "The signatures are not clearly alike. A small, printed or photographed signature can cause this.",
     "photo_different_person": "The two faces look like two different people.",
     "photo_uncertain": "The faces are not clearly the same. A small, blurred or older photograph can cause this.",
 }
@@ -118,6 +127,8 @@ ACTIONS = {
     "address_difference": _MOVED,
     "id_number_difference": "Check that both documents belong to the same person.",
     "unclear_reading": "Check the original documents, or upload a clearer photo of the one that is hard to read.",
+    "signature_mismatch": "Compare the two signatures yourself and check that the same person signed both documents.",
+    "signature_uncertain": "Compare the two signatures yourself, or ask for a clearer document.",
     "photo_different_person": _SAME_PERSON,
     "photo_uncertain": "Compare the two photographs yourself, or ask for a clearer, recent document.",
 }
@@ -129,7 +140,8 @@ def catalog_strings() -> list[str]:
     strings = [
         *FIELD_LABELS.values(), *DOCUMENT_LABELS.values(), _UNKNOWN_DOCUMENT, *SEVERITY_LABELS.values(),
         SUMMARY_CONFLICT, SUMMARY_HARMLESS, SUMMARY_PHOTO_CONFLICT, SUMMARY_PHOTO_UNCERTAIN,
-        SUMMARY_PHOTO_MATCH, *HARMLESS_REASONS.values(), _HARMLESS_FALLBACK,
+        SUMMARY_PHOTO_MATCH, SUMMARY_SIG_CONFLICT, SUMMARY_SIG_UNCERTAIN, SUMMARY_SIG_MATCH,
+        SUMMARY_SIG_ABSENT, *HARMLESS_REASONS.values(), _HARMLESS_FALLBACK,
         *CONFLICT_REASONS.values(), _CONFLICT_FALLBACK, _INCOME_RATIO, _YEARS_APART, _ONE_YEAR_APART,
         NO_ACTION, *ACTIONS.values(),
     ]
@@ -146,6 +158,7 @@ _HINDI = {
     "Annual income": "वार्षिक आय",
     "Identity number": "पहचान संख्या",
     "Photograph": "फ़ोटो",
+    "Signature": "हस्ताक्षर",
     # documents
     "identity card": "पहचान पत्र",
     "tax identity card": "कर पहचान पत्र",
@@ -174,6 +187,18 @@ _HINDI = {
     SUMMARY_PHOTO_CONFLICT: "{doc_a} की फ़ोटो {doc_b} की फ़ोटो से मेल नहीं खाती।",
     SUMMARY_PHOTO_UNCERTAIN: "{doc_a} की फ़ोटो का {doc_b} की फ़ोटो से मिलान पक्का नहीं हो सका।",
     SUMMARY_PHOTO_MATCH: "{doc_a} और {doc_b} की फ़ोटो एक ही व्यक्ति की हैं।",
+    SUMMARY_SIG_CONFLICT: "{doc_b} का हस्ताक्षर {doc_a} के संदर्भ हस्ताक्षर से मेल नहीं खाता।",
+    SUMMARY_SIG_UNCERTAIN: "{doc_b} के हस्ताक्षर का {doc_a} के संदर्भ हस्ताक्षर से मिलान पक्का नहीं हो सका।",
+    SUMMARY_SIG_MATCH: "{doc_b} का हस्ताक्षर {doc_a} के संदर्भ हस्ताक्षर जैसा दिखता है।",
+    SUMMARY_SIG_ABSENT: "{doc_b} पर हस्ताक्षर नहीं मिला, इसलिए उसकी {doc_a} के संदर्भ हस्ताक्षर से तुलना नहीं हुई।",
+    "The two signatures look alike.": "दोनों हस्ताक्षर एक जैसे दिखते हैं।",
+    "This document carries no signature to compare. That is not a difference.": "इस दस्तावेज़ पर तुलना के लिए हस्ताक्षर नहीं है। यह कोई अंतर नहीं है।",
+    "The two signatures look clearly different.": "दोनों हस्ताक्षर साफ़ तौर पर अलग दिखते हैं।",
+    "The signatures are not clearly alike. A small, printed or photographed signature can cause this.":
+        "हस्ताक्षर साफ़ तौर पर एक जैसे नहीं हैं। छोटे, छपे या फ़ोटो से लिए गए हस्ताक्षर से ऐसा हो सकता है।",
+    "Compare the two signatures yourself and check that the same person signed both documents.":
+        "दोनों हस्ताक्षर खुद मिलाकर देखें और जाँचें कि दोनों दस्तावेज़ों पर एक ही व्यक्ति ने हस्ताक्षर किए हैं।",
+    "Compare the two signatures yourself, or ask for a clearer document.": "दोनों हस्ताक्षर खुद मिलाकर देखें, या ज़्यादा साफ़ दस्तावेज़ माँगें।",
     "The faces look alike.": "दोनों चेहरे एक जैसे दिखते हैं।",
     "The two faces look like two different people.": "दोनों चेहरे दो अलग-अलग व्यक्तियों के लगते हैं।",
     "A value on one of the documents could not be read clearly, so this may be a misreading and not a real difference.":
@@ -261,10 +286,14 @@ def _templates(
 ) -> tuple[str, str, str, dict]:
     """(summary, explanation, action) templates and the numbers they quote."""
     numbers: dict[str, Any] = {}
-    if field_name == "photo":
+    if field_name in ("photo", "signature"):
         summary = {
             "photo_match": SUMMARY_PHOTO_MATCH,
             "photo_uncertain": SUMMARY_PHOTO_UNCERTAIN,
+            "signature_match": SUMMARY_SIG_MATCH,
+            "signature_absent": SUMMARY_SIG_ABSENT,
+            "signature_uncertain": SUMMARY_SIG_UNCERTAIN,
+            "signature_mismatch": SUMMARY_SIG_CONFLICT,
         }.get(reason, SUMMARY_PHOTO_CONFLICT)
         if classification == "harmless_variant":
             return summary, HARMLESS_REASONS.get(reason, _HARMLESS_FALLBACK), NO_ACTION, numbers

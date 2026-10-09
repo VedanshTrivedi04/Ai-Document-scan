@@ -86,7 +86,7 @@ def extract_identity(llm_service: LLMService, document_text: str) -> IdentityAna
 
 
 def identity_extracted_fields(
-    analysis: IdentityAnalysis, faces: dict[str, Any] | None = None
+    analysis: IdentityAnalysis, faces: dict[str, Any] | None = None, signatures: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     """The `documents.extracted_fields` value for one identity document."""
     return {
@@ -94,6 +94,7 @@ def identity_extracted_fields(
         "document_type_confidence": analysis.document_type_confidence,
         "identity_fields": analysis.identity_fields_as_dict(),
         "faces": faces if faces is not None else {"status": "unavailable", "items": []},
+        "signatures": signatures if signatures is not None else {"status": "unavailable", "items": []},
         "core_fields": {name: dict(field) for name, field in _EMPTY_CORE_FIELDS.items()},
         "additional_fields": [f.model_dump() for f in analysis.additional_fields],
     }
