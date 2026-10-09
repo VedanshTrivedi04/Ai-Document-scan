@@ -1931,6 +1931,42 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Push: Successful (`origin/feat/telegram-chatbot`)
 - Status: Complete
 
+---
+
+### 2026-10-09 17:26
+
+**User Request**
+> "normal query ka bhi normal se polite jaba de de, aisa nhi lage ki bas ye hardcoded hai, usne bola need help in booking apppoibt to use bataye gi me ye kam ke liye hu ap uske liye vaha unke contanct kar sakte hai, matalb toda sa ai se reply se de, plan karo kya smaje kya karne jayo ge"
+
+**Exploration**
+- Inspected `SYSTEM_PERSONA`, `_build_grounded_context`, and `_rule_based_grounded_fallback` in `chatbot/chat_service.py`.
+- Identified that when citizens sent general questions (e.g. appointment booking, helpline, greetings) prior to uploading documents, the prompt previously instructed the bot to reply rigidly with *"no documents uploaded yet, upload photos or use /demo"*, sounding hardcoded.
+- Designed comprehensive Citizen Guidance Policy:
+  - Explain DocSure Sarthi's specific role (pre-submission document verification & mismatch detector).
+  - Provide accurate official contact channels for out-of-scope tasks (e.g., UIDAI appointment portal `appointments.uidai.gov.in`, Toll-free 1947, ASK/CSC centers `locator.csccloud.in`, NSDL/UTIITSL, State e-District).
+  - Invite citizens to pre-verify documents prior to booking/attending their appointment.
+
+**Work Done**
+- `chatbot/chat_service.py`:
+  - Updated `SYSTEM_PERSONA` with `ROLE & CITIZEN GUIDANCE POLICY`: covers general chit-chat, out-of-scope citizen services, and polite appointment redirection with official links and helplines.
+  - Updated `_build_grounded_context` when no documents are uploaded to trigger "Citizen Inquiry & Assistance Mode" with high EQ and natural responses.
+  - Enhanced `_rule_based_grounded_fallback` to detect appointment-related inquiries and provide official links if LLM API is unreachable.
+
+**Files Changed**
+- `chatbot/chat_service.py`: Enhanced persona and assistance mode for intelligent general query handling and appointment redirection.
+- `MEMORY.md`: Documented interaction log and verification details.
+
+**Verification**
+- Validated syntax with `py_compile`.
+- Tested live execution with queries:
+  1. `"need help in booking apppoibt"`: Generated polite, AI-driven response detailing Sarthi's verification role, UIDAI / CSC portals, helpline 1947, and an invitation to pre-verify document photos.
+  2. `"in hinglish batao please"`: Seamlessly remembered conversation context and provided natural, friendly Hinglish translation.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Status: Staged and committed.
+
+
 
 
 
