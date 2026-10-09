@@ -211,6 +211,11 @@ def _details_and_summary_html(d: ReportData) -> str:
         "<h1>1. Case Details</h1>",
         '<table cellspacing="0">',
         f'<tr><th width="24%" align="left">Case ID</th><td><b>{_e(d.case_number)}</b> &nbsp;<span class="muted small">{_e(d.case_id)}</span></td></tr>',
+        *(
+            [f"<tr><th>Applicant / Subject</th><td><b>{_e(d.applicant_name)}</b></td></tr>"]
+            if d.applicant_name
+            else []
+        ),
         f"<tr><th>Submitted by</th><td>{_e(d.submitter)}</td></tr>",
         f"<tr><th>Submission date</th><td>{_ts(d.submitted_at)}</td></tr>",
         f"<tr><th>Documents</th><td>{len(d.documents)} &nbsp;&nbsp;<span class=\"muted\">Types:</span> "

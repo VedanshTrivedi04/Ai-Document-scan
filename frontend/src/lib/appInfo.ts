@@ -3,7 +3,7 @@
  * Consumed by vite.config.ts (at build time) and throughout the app.
  */
 
-export const APP_NAME = "Agnitia"
+export const APP_NAME = "DocSure"
 
 export const APP_FULL_NAME = "AI Document Authentication Platform"
 

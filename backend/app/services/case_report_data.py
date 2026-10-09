@@ -384,6 +384,7 @@ class ReportData:
     audit: list[AuditRow]
     audit_truncated: int
     coverage: list[CoverageRow] = field(default_factory=list)
+    applicant_name: str | None = None
     app_name: str = APP_NAME
     app_full_name: str = APP_FULL_NAME
     exceptions: list[ExceptionItem] = field(default_factory=list)
@@ -898,6 +899,27 @@ def extracted_field_rows(extracted: dict[str, Any] | None) -> list[FieldRow]:
     if not isinstance(extracted, dict):
         return []
     rows: list[FieldRow] = []
+    identity = extracted.get("identity_fields") or {}
+    if isinstance(identity, dict) and identity:
+        _IDENTITY_ORDER = (
+            "full_name", "parent_or_spouse_name", "date_of_birth", "gender",
+            "id_number", "address", "annual_income", "issuing_authority", "issue_date",
+        )
+        for name in _IDENTITY_ORDER:
+            item = identity.get(name)
+            if not isinstance(item, dict):
+                continue
+            val = item.get("value")
+            if val is not None and str(val).strip() != "":
+                rows.append(
+                    FieldRow(
+                        name=humanize(name),
+                        value=str(val),
+                        confidence=item.get("confidence"),
+                        uncertain=bool(item.get("uncertain")),
+                        page=(valid_box(item.get("bounding_box")) or {}).get("page"),
+                    )
+                )
     core = extracted.get("core_fields") or {}
     ordered = [n for n in _CORE_FIELD_ORDER if n in core] + [n for n in core if n not in _CORE_FIELD_ORDER]
     for name in ordered:
@@ -1607,11 +1629,25 @@ def collect_report_data(
         .where(IssuerRegistry.is_active.is_(True), IssuerRegistry.company_id == case.company_id)
     ).scalar_one()
     generated = _aware(generated_at)
+
+    applicant_name: str | None = None
+    if getattr(case, "family_member", None):
+        applicant_name = case.family_member.full_name
+    if not applicant_name:
+        for d in documents:
+            if d.extracted_fields and isinstance(d.extracted_fields, dict):
+                id_fields = d.extracted_fields.get("identity_fields") or {}
+                fn = (id_fields.get("full_name") or {}).get("value")
+                if fn:
+                    applicant_name = str(fn)
+                    break
+
     return ReportData(
         report_id=report_id,
         generated_at=generated,
         generated_by_name=_user_name(generated_by),
         generated_by_role=role_label(generated_by.role),
+        applicant_name=applicant_name,
         case_id=case.id,
         case_number=case.case_number,
         case_type=humanize(case.case_type.value),

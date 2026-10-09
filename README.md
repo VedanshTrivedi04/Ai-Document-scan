@@ -1,10 +1,6 @@
-# FDDT — Fraud Document Detection Tool
+# DocSure — AI Document Authentication Platform
 
-(Formerly the "Document Authenticator Tool" / DocAuth. The product name is a
-display-level rename only — the repo folder, `docauth` database/containers and
-code identifiers are unchanged. Its single source is `APP_NAME` /
-`APP_FULL_NAME` in `backend/app/core/config.py` and
-`frontend/src/lib/appInfo.ts`.)
+(The product name's single source is `APP_NAME` / `APP_FULL_NAME` in `backend/app/core/config.py` and `frontend/src/lib/appInfo.ts`.)
 
 AI-powered document authentication, fraud detection, and case-management
 platform. Full documentation — architecture, every pipeline stage, database
