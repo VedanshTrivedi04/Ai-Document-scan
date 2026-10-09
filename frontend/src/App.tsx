@@ -30,6 +30,8 @@ const PlatformUsagePage = lazy(() => import("@/pages/PlatformUsagePage").then((m
 const SettingsIssuerRegistryPage = lazy(() => import("@/pages/SettingsIssuerRegistryPage").then((m) => ({ default: m.SettingsIssuerRegistryPage })))
 const SettingsRiskRulesPage = lazy(() => import("@/pages/SettingsRiskRulesPage").then((m) => ({ default: m.SettingsRiskRulesPage })))
 const SettingsUsersPage = lazy(() => import("@/pages/SettingsUsersPage").then((m) => ({ default: m.SettingsUsersPage })))
+const LandingPage = lazy(() => import("@/pages/LandingPage").then((m) => ({ default: m.LandingPage })))
+const AboutPage = lazy(() => import("@/pages/AboutPage").then((m) => ({ default: m.AboutPage })))
 
 const pageFallback = (
   <div className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
@@ -55,11 +57,12 @@ function App() {
             <ActingCompanyProvider>
             <Suspense fallback={pageFallback}>
           <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/about" element={<AboutPage />} />
             <Route path="/login" element={<LoginPage />} />
 
             <Route element={<ProtectedRoute />}>
               {/* Core Case Management */}
-              <Route path="/" element={<CaseQueuePage />} />
               <Route path="/cases" element={<CaseQueuePage />} />
               <Route path="/review-queue" element={<CaseQueuePage />} />
               <Route path="/cases/new" element={<NewCasePage />} />

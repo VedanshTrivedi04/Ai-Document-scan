@@ -104,10 +104,10 @@ export function LoginPage() {
   })
 
   // Already authenticated — don't show the login form again.
-  if (token && !redirectPrompt) {
-    const from = (location.state as { from?: string } | null)?.from ?? "/"
-    return <Navigate to={from} replace />
-  }
+  // if (token && !redirectPrompt) {
+  //   const from = (location.state as { from?: string } | null)?.from ?? "/"
+  //   return <Navigate to={from} replace />
+  // }
 
   const onSignIn = async (values: LoginFormValues) => {
     setFormError(null)
