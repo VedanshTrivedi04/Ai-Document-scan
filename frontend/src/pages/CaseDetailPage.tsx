@@ -6,6 +6,7 @@ import {
   ClockIcon,
   DownloadIcon,
   FileTextIcon,
+  GaugeIcon,
   GlobeIcon,
   ShieldCheckIcon,
   UsersIcon,
@@ -328,6 +329,38 @@ export function CaseDetailPage() {
 
   const isRtl = (catalog?.direction || availableLanguages.find((l) => l.code === currentLang)?.direction) === "rtl"
 
+  const overallSeverityScore = React.useMemo(() => {
+    if (caseDetail?.assessment?.score !== undefined && caseDetail.assessment?.score !== null) {
+      return caseDetail.assessment.score
+    }
+    if (caseDetail?.flag?.score !== undefined && caseDetail.flag?.score !== null) {
+      return caseDetail.flag.score
+    }
+    if (caseDetail?.cross_document_findings && caseDetail.cross_document_findings.length > 0) {
+      const activeConflicts = caseDetail.cross_document_findings.filter((f) => f.classification === "conflict")
+      if (activeConflicts.length > 0) {
+        return Math.max(
+          ...activeConflicts.map((f) => {
+            if (typeof f.severity_score === "number" && f.severity_score > 0) return f.severity_score
+            switch (f.severity) {
+              case "critical":
+                return f.field_name === "full_name" || f.field_name === "photo" ? 95 : 90
+              case "high":
+                return f.field_name === "date_of_birth" || f.field_name === "gender" ? 75 : 70
+              case "medium":
+                return 50
+              case "low":
+                return 25
+              default:
+                return 0
+            }
+          })
+        )
+      }
+    }
+    return 0
+  }, [caseDetail])
+
   return (
     <div
       dir={isRtl ? "rtl" : "ltr"}
@@ -357,7 +390,29 @@ export function CaseDetailPage() {
                 <span>{caseDetail.submitted_by?.full_name || caseDetail.submitted_by?.email}</span>
                 <span className="text-slate-300">·</span>
                 <span>{documents.length} document{documents.length === 1 ? "" : "s"} attached</span>
-                {!isIdentity && (
+                {isIdentity ? (
+                  <>
+                    <span className="text-slate-300">·</span>
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-2xs",
+                        overallSeverityScore >= 80
+                          ? "bg-red-50 text-red-700 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+                          : overallSeverityScore >= 60
+                          ? "bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800"
+                          : overallSeverityScore >= 40
+                          ? "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                          : overallSeverityScore >= 15
+                          ? "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                      )}
+                      title={`Case Overall Severity Score: ${overallSeverityScore}/100`}
+                    >
+                      <GaugeIcon className="size-3.5" />
+                      <span>Severity Score: {overallSeverityScore}/100</span>
+                    </span>
+                  </>
+                ) : (
                   <>
                     <span className="text-slate-300">·</span>
                     <RiskBadge tier={caseDetail.risk_tier} compact />

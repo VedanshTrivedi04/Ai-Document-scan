@@ -506,6 +506,7 @@ export interface CrossDocumentFinding {
   field_name: string
   finding_type: string
   severity: FindingSeverity
+  severity_score?: number
   description: string
   document_ids: string[] | null
   created_at: string

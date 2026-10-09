@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.id_number_masking import mask_id_numbers, restore_id_numbers
 from app.services.llm_service import IdentityAnalysis, LLMService
 
 IDENTITY_SCHEMA = "identity"
@@ -73,9 +74,15 @@ def is_identity_extraction(extracted_fields: dict[str, Any] | None) -> bool:
 
 
 def extract_identity(llm_service: LLMService, document_text: str) -> IdentityAnalysis:
-    return llm_service.extract_identity(
-        document_text=document_text, document_type_labels=IDENTITY_DOCUMENT_TYPE_LABELS
+    # Identity numbers never reach the model: it sees placeholders, and the
+    # numbers are put back here (app/services/id_number_masking.py).
+    masked_text, numbers = mask_id_numbers(document_text)
+    analysis = llm_service.extract_identity(
+        document_text=masked_text, document_type_labels=IDENTITY_DOCUMENT_TYPE_LABELS
     )
+    if not numbers:
+        return analysis
+    return IdentityAnalysis.model_validate(restore_id_numbers(analysis.model_dump(), numbers))
 
 
 def identity_extracted_fields(

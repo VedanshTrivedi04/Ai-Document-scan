@@ -73,6 +73,19 @@ class CrossDocumentFinding(TenantScopedMixin, UUIDPrimaryKeyMixin, TimestampMixi
     case = relationship("Case", back_populates="cross_document_findings")
     reviewed_by = relationship("User", foreign_keys=[reviewed_by_user_id])
 
+    @property
+    def severity_score(self) -> int:
+        sev = (self.severity.value if hasattr(self.severity, "value") else str(self.severity or "")).lower()
+        if sev == "critical":
+            return 95 if self.field_name in ("full_name", "photo") else 90
+        if sev == "high":
+            return 75 if self.field_name in ("date_of_birth", "gender") else 70
+        if sev == "medium":
+            return 50
+        if sev == "low":
+            return 25
+        return 0
+
 
 def finding_resolution(classification: str | None, review_status: str) -> str:
     """What a finding amounts to once the reviewer's decision is applied:

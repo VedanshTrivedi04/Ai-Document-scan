@@ -9,6 +9,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   Columns2Icon,
+  GaugeIcon,
   InfoIcon,
   LayersIcon,
   Loader2Icon,
@@ -92,6 +93,104 @@ const SEVERITY_ORDER: Record<FindingSeverity, number> = {
   medium: 2,
   low: 3,
   info: 4,
+}
+
+export function getFindingSeverityScore(finding: { severity: FindingSeverity; field_name?: string; severity_score?: number }): number {
+  if (typeof finding.severity_score === "number" && finding.severity_score > 0) {
+    return finding.severity_score
+  }
+  switch (finding.severity) {
+    case "critical":
+      return finding.field_name === "full_name" || finding.field_name === "photo" ? 95 : 90
+    case "high":
+      return finding.field_name === "date_of_birth" || finding.field_name === "gender" ? 75 : 70
+    case "medium":
+      return 50
+    case "low":
+      return 25
+    case "info":
+    default:
+      return 0
+  }
+}
+
+export function getSeverityScoreConfig(score: number) {
+  if (score >= 80) {
+    return {
+      tier: "critical",
+      label: "Critical",
+      badgeClass: "bg-red-50 text-red-700 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800",
+      barClass: "bg-red-600",
+      textClass: "text-red-700",
+    }
+  }
+  if (score >= 60) {
+    return {
+      tier: "high",
+      label: "High",
+      badgeClass: "bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800",
+      barClass: "bg-orange-500",
+      textClass: "text-orange-700",
+    }
+  }
+  if (score >= 40) {
+    return {
+      tier: "medium",
+      label: "Medium",
+      badgeClass: "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
+      barClass: "bg-amber-500",
+      textClass: "text-amber-700",
+    }
+  }
+  if (score >= 15) {
+    return {
+      tier: "low",
+      label: "Low",
+      badgeClass: "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800",
+      barClass: "bg-blue-500",
+      textClass: "text-blue-700",
+    }
+  }
+  return {
+    tier: "info",
+    label: "Safe",
+    badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800",
+    barClass: "bg-emerald-500",
+    textClass: "text-emerald-700",
+  }
+}
+
+export function SeverityScoreBadge({
+  score,
+  label = "Severity score",
+  className,
+}: {
+  score: number
+  label?: string
+  className?: string
+}) {
+  const config = getSeverityScoreConfig(score)
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border shadow-2xs shrink-0 transition-all",
+        config.badgeClass,
+        className
+      )}
+      title={`${label}: ${score}/100 (${config.label})`}
+    >
+      <GaugeIcon className="size-3 shrink-0" />
+      <span className="text-[10px] uppercase font-bold tracking-wider opacity-80">{label}:</span>
+      <span className="font-mono font-extrabold text-xs">{score}</span>
+      <span className="text-[10px] opacity-60 font-mono">/100</span>
+      <span className="w-8 sm:w-10 h-1.5 rounded-full bg-black/10 dark:bg-white/20 overflow-hidden inline-flex ml-0.5">
+        <span
+          className={cn("h-full rounded-full transition-all duration-300", config.barClass)}
+          style={{ width: `${Math.max(score === 0 ? 0 : 8, score)}%` }}
+        />
+      </span>
+    </span>
+  )
 }
 
 function formatReviewDate(iso: string | null | undefined): string {
@@ -271,6 +370,11 @@ export function IdentityFindingsPanel({
     findingCounts?.ignored_as_harmless ??
     harmless.filter((f) => f.resolution !== "conflict_confirmed").length
 
+  const maxConflictScore = React.useMemo(() => {
+    if (conflicts.length === 0) return 0
+    return Math.max(...conflicts.map((f) => getFindingSeverityScore(f)))
+  }, [conflicts])
+
   // Find next / previous finding in side-by-side view
   const currentFindingList = activeTab === "conflicts" ? conflicts : harmless
   const currentIndex = compareFinding ? currentFindingList.findIndex((f) => f.id === compareFinding.id) : -1
@@ -342,6 +446,9 @@ export function IdentityFindingsPanel({
                       {harmlessCount} difference{harmlessCount === 1 ? "" : "s"} ignored as harmless
                     </span>
                   </span>
+                  {maxConflictScore > 0 && (
+                    <SeverityScoreBadge score={maxConflictScore} label="Max score" className="ml-1.5" />
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Cross-checked names, dates of birth, addresses, income, and identity numbers.
@@ -424,6 +531,7 @@ export function IdentityFindingsPanel({
           {Object.entries(activeTab === "conflicts" ? conflictGroups : harmlessGroups).map(([fieldName, items]) => {
             const fieldLabel = catalog?.fields?.[fieldName] ?? IDENTITY_FIELD_LABELS[fieldName] ?? fieldName
             const isExpanded = isGroupExpanded(fieldName, activeTab === "conflicts")
+            const groupMaxScore = Math.max(...items.map((it) => getFindingSeverityScore(it)))
 
             return (
               <div key={fieldName} className="rounded-xl border border-border bg-card shadow-2xs overflow-hidden">
@@ -433,7 +541,7 @@ export function IdentityFindingsPanel({
                   onClick={() => toggleGroup(fieldName)}
                   className="w-full flex items-center justify-between p-3.5 bg-muted/20 hover:bg-muted/40 transition-colors text-left"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {isExpanded ? (
                       <ChevronDownIcon className="size-4 text-muted-foreground" />
                     ) : (
@@ -443,6 +551,9 @@ export function IdentityFindingsPanel({
                     <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
                       {items.length} {items.length === 1 ? "item" : "items"}
                     </span>
+                    {groupMaxScore > 0 && (
+                      <SeverityScoreBadge score={groupMaxScore} className="ml-1" />
+                    )}
                   </div>
                   <span className="text-[11px] text-muted-foreground">
                     {isExpanded ? "Collapse" : "Expand"}
@@ -530,6 +641,7 @@ function FindingCard({
 
   const sev = SEVERITY_CONFIG[finding.severity] ?? SEVERITY_CONFIG.medium
   const SevIcon = sev.icon
+  const findingScore = getFindingSeverityScore(finding)
 
   // Localized severity & field label via catalog
   const severityLabel = catalog?.severities?.[finding.severity] ?? finding.message?.severity_label ?? sev.label
@@ -564,7 +676,7 @@ function FindingCard({
 
   return (
     <div id={`finding-${finding.field_name}`} className="rounded-xl border border-border/80 bg-background p-4 flex flex-col gap-3.5 transition-all hover:border-border">
-      {/* Card Header: Chip + Field Label + Resolution Chip + Show on Documents Button */}
+      {/* Card Header: Chip + Severity Score + Field Label + Resolution Chip + Show on Documents Button */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <span
@@ -576,6 +688,7 @@ function FindingCard({
             <SevIcon className="size-3.5" />
             {severityLabel}
           </span>
+          <SeverityScoreBadge score={findingScore} />
           <span className="text-sm font-bold text-foreground">{fieldLabel}</span>
 
           {/* Resolution Badge if reviewed */}
@@ -860,6 +973,7 @@ function SideBySideCompareModal({
 
   const sev = SEVERITY_CONFIG[finding.severity] ?? SEVERITY_CONFIG.medium
   const SevIcon = sev.icon
+  const findingScore = getFindingSeverityScore(finding)
 
   // Localized severity, field, and document labels via catalog
   const severityLabel = catalog?.severities?.[finding.severity] ?? finding.message?.severity_label ?? sev.label
@@ -916,6 +1030,7 @@ function SideBySideCompareModal({
                 <SevIcon className="size-3.5" />
                 {severityLabel}
               </span>
+              <SeverityScoreBadge score={findingScore} />
               <span className="text-sm font-bold text-foreground">{fieldLabel}</span>
 
               {isReviewed && (

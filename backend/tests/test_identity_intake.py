@@ -302,6 +302,7 @@ def pipeline_fakes(monkeypatch):
 
     ocr = MagicMock()
     ocr.analyze_url.return_value = fake_identity_ocr()
+    ocr.analyze_bytes.return_value = fake_identity_ocr()
     monkeypatch.setattr(document_processing_module, "get_ocr_service", lambda: ocr)
 
     llm = MagicMock()

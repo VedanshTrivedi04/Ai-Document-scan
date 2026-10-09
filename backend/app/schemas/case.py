@@ -94,6 +94,7 @@ class CrossDocumentFindingSummary(BaseModel):
     field_name: str
     finding_type: str
     severity: str
+    severity_score: int = 0
     description: str
     document_ids: list[str] | None
     created_at: datetime
@@ -136,12 +137,26 @@ class CrossDocumentFindingSummary(BaseModel):
             "reviewed_by_name": (reviewer.full_name or reviewer.email) if reviewer else None,
             "resolution": finding_resolution(finding.classification, finding.review_status or REVIEW_PENDING),
         }
+        sev_score = getattr(finding, "severity_score", 0)
+        if not sev_score:
+            sev_str = (finding.severity.value if hasattr(finding.severity, "value") else str(finding.severity or "")).lower()
+            if sev_str == "critical":
+                sev_score = 95 if finding.field_name in ("full_name", "photo") else 90
+            elif sev_str == "high":
+                sev_score = 75 if finding.field_name in ("date_of_birth", "gender") else 70
+            elif sev_str == "medium":
+                sev_score = 50
+            elif sev_str == "low":
+                sev_score = 25
+            else:
+                sev_score = 0
         if finding.evidence:
             return cls(
                 id=finding.id,
                 field_name=finding.field_name,
                 finding_type=finding.finding_type,
                 severity=finding.severity.value,
+                severity_score=sev_score,
                 description=finding.description,
                 document_ids=finding.document_ids,
                 created_at=finding.created_at,
@@ -161,6 +176,7 @@ class CrossDocumentFindingSummary(BaseModel):
             field_name=finding.field_name,
             finding_type=finding.finding_type,
             severity=finding.severity.value,
+            severity_score=sev_score,
             description=finding.description,
             document_ids=finding.document_ids,
             created_at=finding.created_at,

@@ -1035,7 +1035,9 @@ and put the year in `raw_text`.
    - address: the person's own address on one line in `value`, in Latin \
 letters in `latin`, and the postal/PIN code alone in `postal_code`.
    - id_number: this document's own identity or certificate number, exactly \
-as printed, including any masking characters such as X or *.
+as printed, including any masking characters such as X or *. A number may \
+appear in the text as a placeholder such as [ID_NUMBER_1]: treat it as the \
+number and copy the placeholder exactly, brackets included.
    - annual_income: the person's stated yearly income as a plain number in \
 `value` (Western digits, no separators), its 3-letter currency code in \
 `currency`, original text in `raw_text`. A monthly figure is NOT annual \
