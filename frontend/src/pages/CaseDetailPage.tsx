@@ -37,6 +37,7 @@ import { PersonDetailsPanel } from "@/components/case/PersonDetailsPanel"
 import { VerifiedProfilePanel } from "@/components/case/VerifiedProfilePanel"
 import { FormsListSection } from "@/components/case/FormsListSection"
 import { APP_FULL_NAME, APP_NAME } from "@/lib/appInfo"
+import { FileRemovedNotice, PrivateCaseBanner, RetentionBadge } from "@/components/case/RetentionNotice"
 import { cn } from "@/lib/utils"
 import {
   DOCUMENT_TYPE_LABELS,
@@ -223,7 +224,7 @@ export function CaseDetailPage() {
   // a new file: it reloads and suspends again each time. Keep the first URL
   // per document for the viewer while the page is open (the SAS is valid for
   // 15 minutes and pdf.js keeps the loaded file).
-  const [viewerFile, setViewerFile] = React.useState<{ docId: string; url: string } | null>(null)
+  const [viewerFile, setViewerFile] = React.useState<{ docId: string; url: string | null } | null>(null)
   if (activeDoc && viewerFile?.docId !== activeDoc.id) {
     // Adjusting state during render when the selected document changes
     // (React's supported pattern); later refetches keep the stored URL.
@@ -383,6 +384,12 @@ export function CaseDetailPage() {
           <ChevronLeftIcon className="w-3.5 h-3.5" />
           <span>{!isOrgSite && !isReviewerRole ? (isIdentity ? "Back to family" : "Back to my cases") : "Back to queue"}</span>
         </Link>
+
+        {caseDetail?.delete_on_logout && (
+          <div className="mb-3">
+            <PrivateCaseBanner dataRemovedAt={caseDetail.data_removed_at} />
+          </div>
+        )}
 
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
@@ -621,25 +628,32 @@ export function CaseDetailPage() {
                           </span>
                         )}
                       </div>
-                      <a
-                        href={activeDoc.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-                        title="Download or open original file"
-                      >
-                        <DownloadIcon className="w-4 h-4" />
-                      </a>
+                      <RetentionBadge expiresAt={activeDoc.file_expires_at} />
+                      {activeDoc.file_url && (
+                        <a
+                          href={activeDoc.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                          title="Download or open original file"
+                        >
+                          <DownloadIcon className="w-4 h-4" />
+                        </a>
+                      )}
                     </div>
                   </div>
 
                   <div className="mt-3">
-                    <PdfOverlayViewer
-                      fileUrl={viewerUrl ?? activeDoc.file_url}
-                      originalFilename={activeDoc.original_filename}
-                      overlays={[]}
-                      selectedBox={selectedBox}
-                    />
+                    {activeDoc.file_url ? (
+                      <PdfOverlayViewer
+                        fileUrl={viewerUrl ?? activeDoc.file_url}
+                        originalFilename={activeDoc.original_filename}
+                        overlays={[]}
+                        selectedBox={selectedBox}
+                      />
+                    ) : (
+                      <FileRemovedNotice dataRemoved={Boolean(caseDetail?.data_removed_at)} />
+                    )}
                   </div>
                 </div>
               )}
@@ -929,19 +943,28 @@ export function CaseDetailPage() {
                           {DOCUMENT_TYPE_LABELS[activeDoc.document_type ?? ""] ?? activeDoc.original_filename}
                         </h2>
                       </div>
-                      <a
-                        href={activeDoc.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-                        title="Download or open original file"
-                      >
-                        <DownloadIcon className="w-4 h-4" />
-                      </a>
+                      <div className="flex items-center gap-2">
+                        <RetentionBadge expiresAt={activeDoc.file_expires_at} />
+                        {activeDoc.file_url && (
+                          <a
+                            href={activeDoc.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                            title="Download or open original file"
+                          >
+                            <DownloadIcon className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
                     </div>
 
                     <div className="mt-3">
-                      <PdfOverlayViewer fileUrl={viewerUrl ?? activeDoc.file_url} overlays={getCheckOverlays(activeDoc.checks, caseDetail?.cross_document_findings ?? [], activeDoc.id)} />
+                      {activeDoc.file_url ? (
+                        <PdfOverlayViewer fileUrl={viewerUrl ?? activeDoc.file_url} overlays={getCheckOverlays(activeDoc.checks, caseDetail?.cross_document_findings ?? [], activeDoc.id)} />
+                      ) : (
+                        <FileRemovedNotice dataRemoved={Boolean(caseDetail?.data_removed_at)} />
+                      )}
                     </div>
 
                     {/* Extracted fields */}

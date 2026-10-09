@@ -1,7 +1,14 @@
 import * as React from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { getMe, login as loginRequest, register as registerRequest, type LoginPayload, type RegisterPayload } from "@/api/auth"
+import {
+  getMe,
+  login as loginRequest,
+  logoutRequest,
+  register as registerRequest,
+  type LoginPayload,
+  type RegisterPayload,
+} from "@/api/auth"
 import type { CurrentUser, TokenResponse } from "@/types/auth"
 
 const TOKEN_STORAGE_KEY = "docauth.token"
@@ -78,9 +85,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const logout = React.useCallback(() => {
+    // Tell the server first, so private cases are emptied now. The sign-out
+    // itself never waits on it or fails because of it: a private case left
+    // behind is emptied by the server once the session has run out.
+    const current = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (current) {
+      void logoutRequest(current).catch(() => undefined)
+    }
     localStorage.removeItem(TOKEN_STORAGE_KEY)
     setToken(null)
-    queryClient.removeQueries({ queryKey: ["me"] })
+    queryClient.clear()
   }, [queryClient])
 
   const value = React.useMemo(

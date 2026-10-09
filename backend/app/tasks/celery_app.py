@@ -73,6 +73,8 @@ TASK_QUEUES: dict[str, str] = {
     "reconcile_usage_stats": HOUSEKEEPING_QUEUE,
     "log_queue_metrics": HOUSEKEEPING_QUEUE,
     "requeue_stuck_documents": HOUSEKEEPING_QUEUE,
+    "purge_expired_files": HOUSEKEEPING_QUEUE,
+    "purge_private_cases": HOUSEKEEPING_QUEUE,
 }
 
 celery_app = Celery(
@@ -94,6 +96,7 @@ celery_app = Celery(
         "app.tasks.usage_tasks",
         "app.tasks.stuck_documents_task",
         "app.tasks.bulk_upload_task",
+        "app.tasks.retention_task",
     ],
 )
 
@@ -129,6 +132,14 @@ celery_app.conf.update(
         "log-queue-metrics": {"task": "log_queue_metrics", "schedule": 60.0},
         # Re-queue documents whose tasks were lost (Redis restart / outage).
         "requeue-stuck-documents": {"task": "requeue_stuck_documents", "schedule": 300.0},
+        # Document retention (app/services/retention_service.py): stored files
+        # past DOCUMENT_RETENTION_DAYS, once a day; private cases whose
+        # submitter's session ran out, every ten minutes.
+        "purge-expired-files-daily": {
+            "task": "purge_expired_files",
+            "schedule": crontab(hour=settings.document_retention_hour_utc, minute=30),
+        },
+        "purge-private-cases": {"task": "purge_private_cases", "schedule": 600.0},
     },
 )
 

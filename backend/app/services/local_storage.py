@@ -5,8 +5,8 @@ account; originals are still written once and never changed.
 
 A stored file's durable URL is `local://<container>/<path>`. A browser fetches
 it through GET /files/{token} (app/api/files.py), where the token carries the
-path and an expiry and is signed with the JWT secret, the same idea as a
-signed Blob Storage URL.
+path and an expiry and is signed with FILE_LINK_SECRET (the JWT secret when
+that is unset), the same idea as a signed Blob Storage URL.
 """
 from __future__ import annotations
 
@@ -24,7 +24,8 @@ from app.services.storage_service import StorageOperationError, StorageService
 
 
 def _sign(payload: str) -> str:
-    return hmac.new(settings.jwt_secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()[:32]
+    secret = settings.file_link_secret or settings.jwt_secret_key
+    return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()[:32]
 
 
 def make_token(path: str, expires_in_minutes: int) -> str:
@@ -92,3 +93,13 @@ class LocalStorageService(StorageService):
                 shutil.copyfileobj(source, fileobj)
         except OSError as exc:
             raise StorageOperationError(f"Failed to read the file: {exc}") from exc
+
+    def delete(self, file_url: str) -> bool:
+        target = self.path_for(self._relative(file_url))
+        try:
+            target.unlink()
+            return True
+        except FileNotFoundError:
+            return False
+        except OSError as exc:
+            raise StorageOperationError(f"Failed to delete the file: {exc}") from exc

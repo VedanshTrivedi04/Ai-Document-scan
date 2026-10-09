@@ -61,6 +61,17 @@ class UploadLimitsResponse(BaseModel):
     max_zip_size_bytes: int
 
 
+class RetentionPolicyResponse(BaseModel):
+    """How long the caller's uploads are kept (app/services/retention_service.py)."""
+
+    document_retention_days: int = Field(
+        description="Days an uploaded file is kept before it is removed (what was read from it stays). 0: kept."
+    )
+    private_upload_available: bool = Field(
+        description="Whether the caller may create a private case (`delete_on_logout`): a `user` of the public site."
+    )
+
+
 class ChangePasswordRequest(BaseModel):
     """Change your own password. The current password is required; a
     forgotten password is reset by a platform admin instead (there is no

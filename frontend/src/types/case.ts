@@ -182,6 +182,10 @@ export interface CaseListItem {
   // Whether the current user may approve/reject/escalate given the tier
   // (false for a Reviewer L1 on an L2 case — read-only). Server-computed.
   can_act: boolean
+  // A private upload: emptied when its submitter signs out.
+  delete_on_logout?: boolean
+  // When a private case was emptied; its files and details are gone.
+  data_removed_at?: string | null
 }
 
 export type DocumentProcessingStatus = "pending" | "processing" | "complete" | "failed"
@@ -432,8 +436,13 @@ export interface CaseDetailDocument {
   content_type: string | null
   file_size_bytes: number | null
   file_hash: string
-  // Short-lived signed URL — fetch a fresh case detail if it expires.
-  file_url: string
+  // Short-lived signed URL — fetch a fresh case detail if it expires. Null once
+  // the stored file has been removed (see file_deleted_at): the details read
+  // from the document are still here, the file is not.
+  file_url: string | null
+  file_deleted_at?: string | null
+  // When the file will be removed; null when it is gone or files are kept.
+  file_expires_at?: string | null
   uploaded_at: string
   checks: DocumentCheck[]
 }

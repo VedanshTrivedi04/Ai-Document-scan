@@ -39,6 +39,22 @@ export function changePassword(payload: ChangePasswordPayload, token: string): P
   return apiFetch<void>("/auth/me/password", { method: "POST", body: JSON.stringify(payload), token })
 }
 
+export interface PrivateCase {
+  id: string
+  case_number: string
+  created_at: string
+}
+
+// The caller's private cases that signing out will empty.
+export function getPrivateCases(token: string): Promise<PrivateCase[]> {
+  return apiFetch<PrivateCase[]>("/auth/private-cases", { token })
+}
+
+// Sign out on the server: empties the caller's private cases for good.
+export function logoutRequest(token: string): Promise<{ removed_cases: string[] }> {
+  return apiFetch<{ removed_cases: string[] }>("/auth/logout", { method: "POST", token })
+}
+
 export function getMe(token: string): Promise<CurrentUser> {
   return apiFetch<CurrentUser>("/auth/me", { token })
 }

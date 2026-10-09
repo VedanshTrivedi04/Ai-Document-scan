@@ -21,6 +21,8 @@ export function createCase(
   caseType: CaseType,
   token: string,
   familyMemberId?: string | null,
+  // A private upload: the case's files and details are removed at sign-out.
+  deleteOnLogout = false,
 ): Promise<Case> {
   return apiFetch<Case>("/cases", {
     method: "POST",
@@ -28,6 +30,7 @@ export function createCase(
     body: JSON.stringify({
       case_type: caseType,
       ...(familyMemberId ? { family_member_id: familyMemberId } : {}),
+      ...(deleteOnLogout ? { delete_on_logout: true } : {}),
     }),
   })
 }

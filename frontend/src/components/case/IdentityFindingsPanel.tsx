@@ -755,7 +755,7 @@ function FindingCard({
                 )}
               </div>
               <FaceCropThumbnail
-                fileUrl={docA?.file_url}
+                fileUrl={docA?.file_url ?? undefined}
                 originalFilename={docA?.original_filename}
                 contentType={docA?.content_type}
                 boundingBox={evA?.bounding_box}
@@ -780,7 +780,7 @@ function FindingCard({
                 )}
               </div>
               <FaceCropThumbnail
-                fileUrl={docB?.file_url}
+                fileUrl={docB?.file_url ?? undefined}
                 originalFilename={docB?.original_filename}
                 contentType={docB?.content_type}
                 boundingBox={evB?.bounding_box}
@@ -1242,7 +1242,7 @@ function SideBySideCompareModal({
               <div className="flex items-center gap-2.5 min-w-0">
                 {finding.field_name === "photo" && evA?.bounding_box && (
                   <FaceCropThumbnail
-                    fileUrl={docA?.file_url}
+                    fileUrl={docA?.file_url ?? undefined}
                     originalFilename={docA?.original_filename}
                     contentType={docA?.content_type}
                     boundingBox={evA?.bounding_box}
@@ -1270,7 +1270,7 @@ function SideBySideCompareModal({
             </div>
 
             <div className="flex-1 overflow-auto">
-              {docA ? (
+              {docA?.file_url ? (
                 <PdfOverlayViewer
                   fileUrl={docA.file_url}
                   originalFilename={docA.original_filename}
@@ -1279,7 +1279,9 @@ function SideBySideCompareModal({
                   selectedBoxColor={overlayColor}
                 />
               ) : (
-                <div className="p-8 text-center text-xs text-muted-foreground">Document unavailable</div>
+                <div className="p-8 text-center text-xs text-muted-foreground">
+                  This file is no longer stored. Uploaded files are removed after a limited time; the details read from it are kept.
+                </div>
               )}
             </div>
           </div>
@@ -1290,7 +1292,7 @@ function SideBySideCompareModal({
               <div className="flex items-center gap-2.5 min-w-0">
                 {finding.field_name === "photo" && evB?.bounding_box && (
                   <FaceCropThumbnail
-                    fileUrl={docB?.file_url}
+                    fileUrl={docB?.file_url ?? undefined}
                     originalFilename={docB?.original_filename}
                     contentType={docB?.content_type}
                     boundingBox={evB?.bounding_box}
@@ -1318,7 +1320,7 @@ function SideBySideCompareModal({
             </div>
 
             <div className="flex-1 overflow-auto">
-              {docB ? (
+              {docB?.file_url ? (
                 <PdfOverlayViewer
                   fileUrl={docB.file_url}
                   originalFilename={docB.original_filename}
@@ -1327,7 +1329,9 @@ function SideBySideCompareModal({
                   selectedBoxColor={overlayColor}
                 />
               ) : (
-                <div className="p-8 text-center text-xs text-muted-foreground">Document unavailable</div>
+                <div className="p-8 text-center text-xs text-muted-foreground">
+                  This file is no longer stored. Uploaded files are removed after a limited time; the details read from it are kept.
+                </div>
               )}
             </div>
           </div>

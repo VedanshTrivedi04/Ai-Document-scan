@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.services.face_service import public_extracted_fields
 from app.services.check_summaries import summarize_document_checks
 from app.services.field_exception_service import with_field_regions
+from app.services.retention_service import file_expires_at
 
 
 class DocumentResponse(BaseModel):
@@ -24,6 +25,9 @@ class DocumentResponse(BaseModel):
     file_url: str
     uploaded_at: datetime
     processing_status: str
+    # When the stored file will be removed (DOCUMENT_RETENTION_DAYS after
+    # upload); null when retention is switched off.
+    file_expires_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -39,6 +43,7 @@ class DocumentResponse(BaseModel):
             file_url=file_url or document.blob_storage_path,
             uploaded_at=document.created_at,
             processing_status=document.processing_status.value,
+            file_expires_at=file_expires_at(document.created_at, getattr(document, "file_deleted_at", None)),
         )
 
 
@@ -115,12 +120,17 @@ class CaseDocumentSummary(BaseModel):
     content_type: str | None
     file_size_bytes: int | None
     file_hash: str
-    file_url: str
+    # Null once the stored file has been removed (`file_deleted_at`): the
+    # details read from it are still here, the file itself is not.
+    file_url: str | None
+    file_deleted_at: datetime | None = None
+    # When the file will be removed; null when it is gone or retention is off.
+    file_expires_at: datetime | None = None
     uploaded_at: datetime
     checks: list[DocumentCheckSummary]
 
     @classmethod
-    def from_document(cls, document, file_url: str) -> "CaseDocumentSummary":
+    def from_document(cls, document, file_url: str | None) -> "CaseDocumentSummary":
         summaries = summarize_document_checks(document.checks)
         return cls(
             id=document.id,
@@ -133,6 +143,10 @@ class CaseDocumentSummary(BaseModel):
             file_size_bytes=document.file_size_bytes,
             file_hash=document.file_hash,
             file_url=file_url,
+            file_deleted_at=getattr(document, "file_deleted_at", None),
+            file_expires_at=file_expires_at(
+                getattr(document, "created_at", None), getattr(document, "file_deleted_at", None)
+            ),
             uploaded_at=document.created_at,
             checks=[
                 DocumentCheckSummary.from_check(

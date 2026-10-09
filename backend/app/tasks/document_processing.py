@@ -173,6 +173,11 @@ def process_document(document_id: str, company_id: str | None = None) -> None:
             # audit_log row against either (it needs a real document_id FK).
             return
 
+        if document.file_deleted_at is not None or document.case.data_removed_at is not None:
+            # The file was removed (retention, or a private case emptied at
+            # sign-out) before this task ran: there is nothing to read.
+            return
+
         identity_case = is_identity_case_type(document.case.case_type)
         document.processing_status = DocumentProcessingStatus.processing
         db.commit()

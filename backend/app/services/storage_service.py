@@ -152,6 +152,12 @@ class StorageService(ABC):
         override this to stream; the default buffers once."""
         fileobj.write(self.download_bytes(file_url))
 
+    def delete(self, file_url: str) -> bool:
+        """Remove a stored file for good (document retention, app/services/
+        retention_service.py). True if a file was removed, False if there was
+        none; a file that is already gone is not an error."""
+        raise StorageOperationError("This storage backend cannot delete files.")
+
 
 class AzureBlobStorageService(StorageService):
     def __init__(self, connection_string: str | None, container_name: str):
@@ -229,6 +235,20 @@ class AzureBlobStorageService(StorageService):
             raise StorageOperationError(
                 f"Failed to download the file: {exc}"
             ) from exc
+
+    def delete(self, file_url: str) -> bool:
+        from azure.core.exceptions import ResourceNotFoundError
+
+        try:
+            blob_client = BlobClient.from_blob_url(
+                file_url, credential=self._container.credential
+            )
+            blob_client.delete_blob(delete_snapshots="include")
+            return True
+        except ResourceNotFoundError:
+            return False
+        except AzureError as exc:
+            raise StorageOperationError(f"Failed to delete the file: {exc}") from exc
 
 
 @lru_cache

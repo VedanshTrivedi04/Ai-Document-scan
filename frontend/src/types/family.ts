@@ -12,6 +12,8 @@ export interface FamilyMemberDocument {
   filename: string
   document_type: string | null
   processing_status: string
+  /** The stored file has been removed (retention); the details read from it remain. */
+  file_deleted?: boolean
 }
 
 export interface FamilyMemberCase {

@@ -48,6 +48,7 @@ from app.schemas.settings import (
 )
 from app.services.audit_service import record_event
 from app.services import risk_rule_catalog as catalog
+from app.services import token_revocation
 from app.services.risk_scoring_service import get_risk_settings, load_current_rules
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -785,4 +786,6 @@ def reset_user_password(
     )
     db.commit()
     db.refresh(user)
+    # Whoever was signed in with the old password is signed out.
+    token_revocation.revoke_all_for_user(user.id)
     return _user_response(user, _company_names(db))

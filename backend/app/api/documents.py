@@ -99,6 +99,10 @@ async def upload_document(
     target = load_visible_case(db, case_id, current_user)
     if target.case_type == CaseType.family_comparison:
         raise HTTPException(status.HTTP_409_CONFLICT, "A family comparison case holds no documents.")
+    if target.data_removed_at is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "This private case was emptied when you signed out. Start a new upload."
+        )
     identity_case = is_identity_case_type(target.case_type)
     # This company's limit, read fresh on every request (a platform admin's
     # change applies to the next upload, no new sign-in needed).
@@ -165,6 +169,7 @@ async def upload_document(
     responses={
         401: {"description": "Missing, invalid or expired bearer token, or the user is inactive."},
         404: {"description": "No such document in this case (or, for a `user`, not their case)."},
+        410: {"description": "The stored file has been removed (document retention)."},
         502: {"description": "Blob Storage failed to sign the URL."},
     },
 )
@@ -188,6 +193,12 @@ def get_document_file_url(
     ).scalar_one_or_none()
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if document.file_deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="This file has been removed. Uploaded files are kept for a limited time; "
+            "the details read from it are still available.",
+        )
     ensure_company_blob(document.blob_storage_path, scope.company_id)
     try:
         url = storage.get_download_url(document.blob_storage_path)

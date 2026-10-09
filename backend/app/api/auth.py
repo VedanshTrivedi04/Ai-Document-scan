@@ -30,7 +30,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+    verify_password_or_dummy,
+)
 from app.db import tenancy
 from app.db.session import get_db, get_system_db
 from app.models.company import Company
@@ -41,10 +47,12 @@ from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
     TokenResponse,
+    RetentionPolicyResponse,
     UploadLimitsResponse,
 )
-from app.services import login_throttle, subdomains
+from app.services import login_throttle, subdomains, token_revocation
 from app.services.audit_service import record_event
+from app.services.storage_service import StorageService, get_storage_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -98,6 +106,10 @@ def get_current_user(
         user_id = uuid.UUID(payload["sub"])
     except (ValueError, TypeError):
         raise _unauthorized("Invalid or expired token")
+    # Signed out, or issued before the account's password last changed.
+    if token_revocation.is_revoked(payload):
+        raise _unauthorized("Invalid or expired token")
+    request.state.token_payload = payload
 
     state = tenancy.snapshot(system_db)
     tenancy.bind_platform(system_db)
@@ -238,10 +250,13 @@ def login(
     # Someone else's account is answered exactly like a wrong password.
     requested = subdomains.from_request(request)
     wrong_organisation = requested is not None and requested != company_subdomain
+    # Checked first and for every address, known or not: the answer must not
+    # come back faster for an address that has no account.
+    password_ok = verify_password_or_dummy(payload.password, user.hashed_password if user else None)
     if (
         user is None
         or not user.is_active
-        or not verify_password(payload.password, user.hashed_password)
+        or not password_ok
         or not active
         or wrong_organisation
     ):
@@ -368,6 +383,60 @@ def register(
     return TokenResponse(access_token=access_token, company_subdomain=None)
 
 
+def _private_case_rows(db: Session, user: User) -> list[dict]:
+    from app.services import retention_service
+
+    return [
+        {"id": str(case.id), "case_number": case.case_number, "created_at": case.created_at.isoformat()}
+        for case in retention_service.private_cases_of(db, user.id, user.company_id)
+    ]
+
+
+@router.get(
+    "/private-cases",
+    summary="My private cases that sign-out will empty",
+    description=(
+        "The caller's cases created with `delete_on_logout` that still hold data. Signing out "
+        "(POST /auth/logout) removes their files and everything read from them."
+    ),
+    responses={401: {"description": "Missing, invalid or expired bearer token, or the user is inactive."}},
+)
+def list_private_cases(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_tenant_db)
+) -> list[dict]:
+    if current_user.is_platform_admin:
+        return []
+    return _private_case_rows(db, current_user)
+
+
+@router.post(
+    "/logout",
+    summary="Sign out",
+    description=(
+        "Empties the caller's private cases (`delete_on_logout`): their files, the text read from them, "
+        "the extracted details, the findings and the profile choices are removed for good; each emptied "
+        "case stays as a closed record. Returns the case numbers emptied. The token the request was "
+        "made with is revoked (app/services/token_revocation.py): it is refused from then on. A private "
+        "case whose owner never signs out is emptied once that session has run out."
+    ),
+    responses={401: {"description": "Missing, invalid or expired bearer token, or the user is inactive."}},
+)
+def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_tenant_db),
+    storage: StorageService = Depends(get_storage_service),
+) -> dict:
+    from app.services import retention_service
+
+    removed: list = []
+    if not current_user.is_platform_admin:
+        removed = retention_service.wipe_private_cases_of(db, storage, current_user.id, current_user.company_id)
+        db.commit()
+    token_revocation.revoke(request.state.token_payload)
+    return {"removed_cases": removed}
+
+
 @router.get(
     "/me",
     response_model=CurrentUserResponse,
@@ -443,6 +512,38 @@ def read_upload_limits(
     )
 
 
+@router.get(
+    "/me/retention",
+    response_model=RetentionPolicyResponse,
+    summary="How long my uploads are kept",
+    description=(
+        "The number of days an uploaded file is stored before it is removed automatically (the details "
+        "read from it are kept; 0 means files are kept), and whether the caller may make a private "
+        "upload that is removed at sign-out."
+    ),
+    responses={401: {"description": "Missing, invalid or expired bearer token, or the user is inactive."}},
+)
+def read_retention_policy(
+    current_user: User = Depends(get_current_user),
+    system_db: Session = Depends(get_system_db),
+) -> RetentionPolicyResponse:
+    company_name = None
+    if current_user.company_id is not None:
+        state = tenancy.snapshot(system_db)
+        tenancy.bind_platform(system_db)
+        try:
+            company_name = system_db.execute(
+                select(Company.name).where(Company.id == current_user.company_id)
+            ).scalar_one_or_none()
+        finally:
+            tenancy.restore(system_db, state)
+    return RetentionPolicyResponse(
+        document_retention_days=max(0, settings.document_retention_days),
+        private_upload_available=current_user.role == UserRole.user
+        and company_name == settings.default_company_name,
+    )
+
+
 @router.post(
     "/me/password",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -452,21 +553,36 @@ def read_upload_limits(
         "The new password (8-128 characters, different from the current one) is stored hashed and "
         "the change is recorded in the audit log (never the password). A forgotten password cannot "
         "be reset here: a platform admin resets it (`POST /settings/users/{id}/reset-password`). "
-        "Tokens already issued stay valid until they expire."
+        "Every other token of the account is revoked; the one this request was made with stays valid. "
+        "After LOGIN_MAX_FAILED_ATTEMPTS wrong current passwords the account's changes are refused "
+        "for LOGIN_LOCKOUT_MINUTES (429)."
     ),
     responses={
         400: {"description": "The current password is wrong, or the new one equals it."},
         401: {"description": "Missing, invalid or expired bearer token, or the user is inactive."},
         422: {"description": "The new password is shorter than 8 or longer than 128 characters."},
+        429: {"description": "Too many wrong current passwords."},
     },
 )
 def change_my_password(
     payload: ChangePasswordRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     system_db: Session = Depends(get_system_db),
 ) -> None:
+    # A stolen token must not be a way to guess the password without limit.
+    throttle_key = f"password-change:{current_user.id}"
+    blocked = login_throttle.check(throttle_key, None)
+    if blocked is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts. Try again later.",
+            headers={"Retry-After": str(blocked.retry_after_seconds)},
+        )
     if not verify_password(payload.current_password, current_user.hashed_password):
+        login_throttle.record_failure(throttle_key)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Current password is incorrect.")
+    login_throttle.record_success(throttle_key)
     if verify_password(payload.new_password, current_user.hashed_password):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "The new password must differ from the current one.")
     state = tenancy.snapshot(system_db)
@@ -483,5 +599,6 @@ def change_my_password(
             event_data={"user_id": str(user.id), "email": user.email},  # never the password
         )
         system_db.commit()
+        token_revocation.revoke_all_for_user(user.id, keep=request.state.token_payload)
     finally:
         tenancy.restore(system_db, state)

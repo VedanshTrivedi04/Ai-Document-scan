@@ -22,9 +22,11 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.auth import get_tenant_db, require_company_role
 from app.api.case_access import can_act_on_case, can_manage_case, load_visible_case
 from app.api.tenant_access import CaseScope, CompanyScope, company_scope, get_case_scope
+from app.core.config import settings
 from app.models.audit_log import AuditLog
 from app.models.case import Case, CaseStatus, CaseTier, CaseType, is_identity_case_type
 from app.models.case_action import CaseAction, CaseActionType
+from app.models.company import Company
 from app.models.document import Document
 from app.models.family import Family, FamilyMember
 from app.models.user import User, UserRole, has_rank, role_label
@@ -110,6 +112,15 @@ def create_case(
 ) -> Case:
     if payload.case_type == CaseType.family_comparison:
         raise HTTPException(422, "Family comparisons are created with POST /family/comparisons.")
+    if payload.delete_on_logout:
+        # A private upload is for a person's own documents on the public site;
+        # inside an organisation its reviewers need the case to stay.
+        company = db.get(Company, current_user.company_id)
+        public_site = company is not None and company.name == settings.default_company_name
+        if current_user.role != UserRole.user or not public_site or not is_identity_case_type(payload.case_type):
+            raise HTTPException(
+                422, "A private upload is only available for a person's documents on the public site."
+            )
     family_member_id = payload.family_member_id
     own_member_id = db.execute(
         select(FamilyMember.id).where(
@@ -149,6 +160,7 @@ def create_case(
         case_type=payload.case_type,
         submitted_by_user_id=current_user.id,
         status=CaseStatus.submitted,
+        delete_on_logout=payload.delete_on_logout,
     )
     db.add(case)
     # `AuditLog` has no ORM `relationship()` to `Case` (deliberately kept
@@ -165,6 +177,7 @@ def create_case(
         event_data={
             "case_type": payload.case_type.value,
             **({"family_member_id": str(family_member_id)} if family_member_id else {}),
+            **({"delete_on_logout": True} if payload.delete_on_logout else {}),
         },
     )
     record_case_created(db, current_user.company_id)
@@ -261,6 +274,8 @@ def list_cases(
             document_count=document_count,
             flag=_visible_flag(current_user, CaseFlagSchema.from_case_flag(flags_by_case[case.id])),
             can_act=can_act_on_case(current_user, case),
+            delete_on_logout=case.delete_on_logout,
+            data_removed_at=case.data_removed_at,
         )
         for case, document_count in rows
     ]
@@ -304,7 +319,9 @@ def get_case_detail(
         selectinload(Case.cross_document_findings),
     )
 
-    def _signed(doc: Document) -> str:
+    def _signed(doc: Document) -> str | None:
+        if doc.file_deleted_at is not None:
+            return None  # removed (retention, or a private case emptied); the details remain
         ensure_company_blob(doc.blob_storage_path, case.company_id)
         return storage.get_download_url(doc.blob_storage_path)
 
@@ -380,6 +397,8 @@ def get_case_detail(
         ),
         can_act=can_act_on_case(current_user, case),
         can_manage=can_manage_case(db, current_user, case),
+        delete_on_logout=case.delete_on_logout,
+        data_removed_at=case.data_removed_at,
         family_member=(
             CaseFamilyMember(
                 id=case.family_member.id,

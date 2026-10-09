@@ -63,6 +63,10 @@ class FakeStorageService(StorageService):
     def download_bytes(self, file_url):
         return self.uploads[file_url.rsplit("/documents/", 1)[-1]]
 
+    def delete(self, file_url):
+        # The blob path itself may contain "/documents/": cut at the container, the first one.
+        return self.uploads.pop(file_url.split("/documents/", 1)[-1], None) is not None
+
 
 @pytest.fixture()
 def db_session():
@@ -208,6 +212,12 @@ class FakeRedis:
     def get(self, key):
         value = self.values.get(key)
         return None if value is None else str(value).encode()
+
+    def set(self, key, value, ex=None):
+        self.values[key] = value
+        if ex is not None:
+            self.ttls[key] = int(ex)
+        return True
 
     def incr(self, key):
         self.values[key] = self.values.get(key, 0) + 1

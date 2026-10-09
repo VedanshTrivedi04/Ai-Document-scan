@@ -54,6 +54,8 @@ class BulkUpload(TenantScopedMixin, UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # like the single-case form's case type).
     case_type: Mapped[CaseType] = mapped_column(Enum(CaseType, name="case_type"), nullable=False)
     blob_storage_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    # When the stored zip was removed (DOCUMENT_RETENTION_DAYS after upload).
+    file_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     file_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     zip_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
 

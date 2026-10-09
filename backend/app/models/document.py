@@ -15,8 +15,9 @@ of that lives on this model.
 """
 import enum
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSON, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -68,6 +69,11 @@ class Document(TenantScopedMixin, UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Arabic documents) can be checked against what the model actually saw.
     ocr_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # When the stored file was removed (app/services/retention_service.py):
+    # DOCUMENT_RETENTION_DAYS after upload, or with a private case's data. The
+    # row and what was read from the document stay; `blob_storage_path` then
+    # names a file that no longer exists.
+    file_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     case = relationship("Case", back_populates="documents")
     checks = relationship("DocumentCheck", back_populates="document")

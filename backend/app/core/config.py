@@ -7,9 +7,20 @@ same code moves from local development to Azure later without changes.
 See `.env.example` at the backend root for the full list of variables a
 local `.env` file must define.
 """
+import logging
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
+
+logger = logging.getLogger("fddt.config")
+
+# ENVIRONMENT values that mean "a developer's machine or a test run". Anywhere
+# else the app refuses to start with a guessable JWT secret.
+LOCAL_ENVIRONMENTS = frozenset({"local", "dev", "development", "test", "testing", "ci"})
+ALLOWED_JWT_ALGORITHMS = frozenset({"HS256", "HS384", "HS512"})
+MIN_JWT_SECRET_LENGTH = 32
+_PLACEHOLDER_SECRETS = frozenset({"changeme-in-.env", "change-this-to-a-long-random-string"})
+_LOCAL_DATABASE_PASSWORDS = frozenset({"fddt_app_local", "fddt_platform_local"})
 
 # The product's display name — the ONE place backend code gets it from
 # (API docs title, PDF report header/footer/metadata, any future email
@@ -149,6 +160,14 @@ class Settings(BaseSettings):
     stuck_document_processing_minutes: int = Field(default=30, alias="STUCK_DOCUMENT_PROCESSING_MINUTES")
     stuck_document_max_requeues: int = Field(default=3, alias="STUCK_DOCUMENT_MAX_REQUEUES")
     stuck_document_batch_size: int = Field(default=200, alias="STUCK_DOCUMENT_BATCH_SIZE")
+    # Document retention (app/services/retention_service.py). A stored file
+    # (and its OCR text) is removed this many days after upload; what was read
+    # from it stays. 0 switches the removal off. The job runs once a day at
+    # DOCUMENT_RETENTION_HOUR_UTC and handles at most
+    # DOCUMENT_RETENTION_BATCH_SIZE files per run.
+    document_retention_days: int = Field(default=24, alias="DOCUMENT_RETENTION_DAYS")
+    document_retention_hour_utc: int = Field(default=3, alias="DOCUMENT_RETENTION_HOUR_UTC")
+    document_retention_batch_size: int = Field(default=500, alias="DOCUMENT_RETENTION_BATCH_SIZE")
 
     # --- Sign-in throttling (app/services/login_throttle.py, Redis) ---
     # After this many failed sign-ins for one email address, that address is
@@ -221,6 +240,39 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = Field(
         default=60 * 8, alias="JWT_ACCESS_TOKEN_EXPIRE_MINUTES"
     )
+    # Signs the links to locally stored files (app/services/local_storage.py).
+    # Unset: the JWT secret signs them too.
+    file_link_secret: str | None = Field(default=None, alias="FILE_LINK_SECRET")
+    # Swagger UI, ReDoc and /openapi.json. Unset: on for a local environment,
+    # off anywhere else.
+    api_docs_enabled: bool | None = Field(default=None, alias="API_DOCS_ENABLED")
+
+    @property
+    def is_local_environment(self) -> bool:
+        return self.environment.strip().lower() in LOCAL_ENVIRONMENTS
+
+    @property
+    def docs_enabled(self) -> bool:
+        return self.is_local_environment if self.api_docs_enabled is None else self.api_docs_enabled
+
+    @model_validator(mode="after")
+    def _check_secrets(self) -> "Settings":
+        if self.jwt_algorithm.upper() not in ALLOWED_JWT_ALGORITHMS:
+            raise ValueError(f"JWT_ALGORITHM must be one of {sorted(ALLOWED_JWT_ALGORITHMS)}.")
+        weak = self.jwt_secret_key in _PLACEHOLDER_SECRETS or len(self.jwt_secret_key) < MIN_JWT_SECRET_LENGTH
+        if weak and not self.is_local_environment:
+            raise ValueError(
+                f"JWT_SECRET_KEY must be a random value of at least {MIN_JWT_SECRET_LENGTH} characters when "
+                f"ENVIRONMENT is '{self.environment}'. Generate one with: "
+                'python -c "import secrets; print(secrets.token_urlsafe(64))"'
+            )
+        if weak:
+            logger.warning("JWT_SECRET_KEY is a placeholder or too short: acceptable for local development only.")
+        if not self.is_local_environment and (
+            {self.database_app_password, self.database_platform_password} & _LOCAL_DATABASE_PASSWORDS
+        ):
+            logger.warning("The database roles still use their local development passwords.")
+        return self
 
     # --- Azure Blob Storage ---
     azure_storage_connection_string: str | None = Field(

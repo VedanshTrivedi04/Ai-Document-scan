@@ -26,6 +26,7 @@ from app.api.profiles import router as profiles_router
 from app.api.settings import router as settings_router
 from app.api.signatures import router as signatures_router
 from app.core.config import APP_FULL_NAME, APP_NAME, settings
+from app.core.security_headers import SecurityHeadersMiddleware
 
 app = FastAPI(
     title=f"{APP_NAME} — {APP_FULL_NAME} API",
@@ -34,7 +35,13 @@ app = FastAPI(
         f"{APP_NAME} ({APP_FULL_NAME}) backend. "
         f"Environment: {settings.environment}."
     ),
+    # The API's map is not published outside a local environment (API_DOCS_ENABLED).
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url="/redoc" if settings.docs_enabled else None,
+    openapi_url="/openapi.json" if settings.docs_enabled else None,
 )
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(auth_router)
 app.include_router(cases_router)
@@ -59,7 +66,12 @@ app.include_router(platform_router)
     "/health",
     tags=["health"],
     summary="Liveness check",
-    description="Unauthenticated. Returns `{status: ok, environment}`; does not touch the database, Redis or Azure.",
+    description=(
+        "Unauthenticated. Returns `{status: ok}`, with `environment` in a local environment only; "
+        "does not touch the database, Redis or Azure."
+    ),
 )
 def health_check() -> dict[str, str]:
+    if not settings.is_local_environment:
+        return {"status": "ok"}
     return {"status": "ok", "environment": settings.environment}

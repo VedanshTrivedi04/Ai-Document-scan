@@ -23,6 +23,12 @@ class CaseCreateRequest(BaseModel):
         description="The family member this bundle is for (GET /family). Only the head of that "
         "family may set it, and only on an identity or hiring verification case.",
     )
+    delete_on_logout: bool = Field(
+        default=False,
+        description="A private upload: this case's files and everything read from them are removed when "
+        "you sign out (or your session runs out). Only for a person's documents on the public site: "
+        "an identity or hiring verification case by a `user` of the public company (422 otherwise).",
+    )
 
 
 class CaseResponse(BaseModel):
@@ -80,6 +86,12 @@ class CaseListItem(BaseModel):
         description="Whether the caller may approve/reject/escalate this case given its tier. "
         "False for submitters, and for a `reviewer_l1` on an L2-assigned case (read-only). "
         "Does not reflect status — a decided case is still `can_act` but every action is a 409."
+    )
+    delete_on_logout: bool = Field(
+        default=False, description="A private upload, emptied when its submitter signs out."
+    )
+    data_removed_at: datetime | None = Field(
+        default=None, description="When a private case was emptied; its files and details are gone."
     )
 
 

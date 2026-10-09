@@ -16,6 +16,7 @@ import {
 import { createPortal } from "react-dom"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 
+import { getPrivateCases } from "@/api/auth"
 import { ChangePasswordModal } from "@/components/ChangePasswordModal"
 import { useAuth } from "@/hooks/useAuth"
 import { useOrganisation } from "@/hooks/useOrganisation"
@@ -76,17 +77,33 @@ export interface NavProps {
 export function Nav({ active, onNewUploadClick }: NavProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, logout } = useAuth()
+  const { user, logout, token } = useAuth()
   const { organisation } = useOrganisation()
   const orgName = organisation?.name || user?.company_name
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [changingPassword, setChangingPassword] = React.useState(false)
   const displayName = user?.full_name || user?.email || ""
 
-  const handleSignOut = React.useCallback(() => {
+  const handleSignOut = React.useCallback(async () => {
+    // Signing out empties private uploads for good: say so first.
+    if (token && user && !user.is_platform_admin) {
+      try {
+        const waiting = await getPrivateCases(token)
+        if (waiting.length > 0) {
+          const list = waiting.map((c) => c.case_number).join(", ")
+          const ok = window.confirm(
+            `Signing out will permanently remove ${waiting.length} private upload${waiting.length === 1 ? "" : "s"} ` +
+              `(${list}): the files and everything read from them. This cannot be undone.\n\nSign out?`,
+          )
+          if (!ok) return
+        }
+      } catch {
+        // Could not check; the sign-out still goes ahead.
+      }
+    }
     logout()
     navigate("/", { replace: true })
-  }, [logout, navigate])
+  }, [logout, navigate, token, user])
 
   // Close mobile drawer when route changes
   React.useEffect(() => {

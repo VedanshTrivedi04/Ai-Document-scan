@@ -80,7 +80,8 @@ def find_stuck_documents(db) -> list[Document]:
         return []
     return list(db.execute(
         select(Document)
-        .where(or_(*conditions))
+        # A document whose file was removed (retention) cannot be read again.
+        .where(or_(*conditions), Document.file_deleted_at.is_(None))
         .order_by(Document.created_at)
         .limit(max(1, settings.stuck_document_batch_size))
     ).scalars())

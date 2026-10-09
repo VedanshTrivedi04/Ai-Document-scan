@@ -67,6 +67,7 @@ const MEMBERS_I18N: Record<string, Record<string, string>> = {
     remove_login: "Remove sign-in",
     remove_login_confirm: "Remove this person's sign-in? They will no longer be able to sign in. Their documents stay.",
     processing: "Reading…",
+    file_removed: "file removed",
   },
   hi: {
     title: "परिवार के सदस्य",
@@ -101,6 +102,7 @@ const MEMBERS_I18N: Record<string, Record<string, string>> = {
     remove_login: "साइन-इन हटाएँ",
     remove_login_confirm: "क्या इस व्यक्ति का साइन-इन हटाना है? वे साइन-इन नहीं कर पाएँगे। उनके दस्तावेज़ बने रहेंगे।",
     processing: "पढ़ा जा रहा है…",
+    file_removed: "फ़ाइल हटा दी गई",
   },
 }
 
@@ -280,6 +282,7 @@ export function FamilyMembersList({
                               </span>
                               <span className="shrink-0 text-muted-foreground">
                                 {doc.processing_status === "complete" ? (doc.document_type ?? "—") : t.processing}
+                                {doc.file_deleted ? ` · ${t.file_removed}` : ""}
                               </span>
                             </li>
                           ))}

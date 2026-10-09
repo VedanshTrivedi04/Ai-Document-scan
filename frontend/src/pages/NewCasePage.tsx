@@ -30,7 +30,7 @@ import {
 import { FileDropzone, type FileWithProgress } from "@/components/upload/FileDropzone"
 import { SignatureReferenceCreator } from "@/components/upload/SignatureReferenceCreator"
 import { useAuth } from "@/hooks/useAuth"
-import { useUploadLimits } from "@/hooks/useUploadLimits"
+import { useRetentionPolicy, useUploadLimits } from "@/hooks/useUploadLimits"
 import { clientUploadProblem, ACCEPTED_UPLOAD_TYPES_STRING, ACCEPTED_IDENTITY_UPLOAD_TYPES_STRING } from "@/lib/uploadLimits"
 import { CASE_TYPE_LABELS, CASE_TYPES, isIdentityCase, type Case } from "@/types/case"
 import type { CaseDocument, CaseType, SignatureReference } from "@/types/case"
@@ -57,6 +57,11 @@ export function NewCasePage() {
   const canUpload = Boolean(user) && !isPlatformAdmin
   // This company's per-file limit (set by a platform admin).
   const maxFileBytes = useUploadLimits()?.max_file_size_bytes ?? null
+  // How long an uploaded file is kept before it is removed automatically (0: kept).
+  const retentionPolicy = useRetentionPolicy()
+  const retentionDays = retentionPolicy?.document_retention_days ?? 0
+  // A private upload: removed, with everything read from it, when the person signs out.
+  const [privateUpload, setPrivateUpload] = React.useState(false)
 
   const [fileEntries, setFileEntries] = React.useState<FileWithProgress[]>([])
   const [filesError, setFilesError] = React.useState<string | null>(null)
@@ -133,8 +138,16 @@ export function NewCasePage() {
   const selectedCaseType = watch("caseType")
   const isIdentity = isIdentityCase(selectedCaseType)
   const [submissionCategory, setSubmissionCategory] = React.useState<"person" | "claim">("person")
+  const canUploadPrivately =
+    Boolean(retentionPolicy?.private_upload_available) && isIdentity && submissionCategory === "person"
+  const isPrivateUpload = canUploadPrivately && privateUpload
+  // A private upload is always its own bundle: it must not pull a lasting profile into its removal.
   const attachToExisting =
-    isIdentity && submissionCategory === "person" && selectedCaseType === "identity_verification" && !separateBundle
+    isIdentity &&
+    submissionCategory === "person" &&
+    selectedCaseType === "identity_verification" &&
+    !separateBundle &&
+    !isPrivateUpload
 
   const handleCategorySelect = (category: "person" | "claim") => {
     setSubmissionCategory(category)
@@ -244,7 +257,7 @@ export function NewCasePage() {
       if (!activeCase) {
         // A fresh, isolated case for this submission.
         const memberIdToSend = isIdentity && isHead ? selectedFamilyMemberId : null
-        activeCase = await createCase(values.caseType, token, memberIdToSend)
+        activeCase = await createCase(values.caseType, token, memberIdToSend, isPrivateUpload)
         setCreatedCase(activeCase)
       }
       await uploadAll(activeCase.id)
@@ -323,6 +336,19 @@ export function NewCasePage() {
                         <UsersIcon className="size-3.5" />
                         Linked to household member: <strong>{selectedMember.full_name}</strong> ({selectedMember.relation_label || selectedMember.relation})
                       </p>
+                    )}
+                    {isPrivateUpload ? (
+                      <p role="alert" className="text-xs font-medium mt-1.5 text-amber-900">
+                        Private upload: these files and everything read from them will be removed for good when you
+                        sign out.
+                      </p>
+                    ) : (
+                      retentionDays > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1.5">
+                          The uploaded files will be removed automatically after {retentionDays} days. The details
+                          read from them are kept.
+                        </p>
+                      )
                     )}
                   </div>
 
@@ -600,6 +626,52 @@ export function NewCasePage() {
                     </div>
                   )}
 
+                  {retentionDays > 0 && !isPrivateUpload && (
+                    <div
+                      role="alert"
+                      className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-950 flex flex-col gap-1"
+                    >
+                      <p className="font-semibold">Files are removed after {retentionDays} days</p>
+                      <p>
+                        Each file you upload is deleted automatically {retentionDays} days after upload and cannot be
+                        recovered. The details read from it (name, date of birth, address and so on), the findings and
+                        the verified profile are kept. Keep your own copy of the original.
+                      </p>
+                    </div>
+                  )}
+
+                  {canUploadPrivately && (
+                    <div
+                      className={`rounded-xl border p-3.5 text-xs flex flex-col gap-2 ${
+                        privateUpload ? "border-amber-400 bg-amber-50 text-amber-950" : "border-border bg-muted/20"
+                      }`}
+                    >
+                      <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={privateUpload}
+                          onChange={(e) => setPrivateUpload(e.target.checked)}
+                          disabled={Boolean(createdCase)}
+                          className="mt-0.5 size-4 accent-amber-600"
+                        />
+                        <span>
+                          <span className="font-semibold block">Private upload: remove everything when I sign out</span>
+                          <span className="text-muted-foreground">
+                            For a one-time check. The files and everything read from them are removed for good as soon
+                            as you sign out.
+                          </span>
+                        </span>
+                      </label>
+                      {privateUpload && (
+                        <ul role="alert" className="list-disc pl-9 flex flex-col gap-0.5 font-medium">
+                          <li>The files, the details read from them, the findings and the profile are all removed.</li>
+                          <li>It cannot be undone, and it also happens if your session runs out.</li>
+                          <li>These documents are checked on their own, not added to a saved profile.</li>
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
                   {attachToExisting && existingBundleId && (
                     <div
                       role="status"
@@ -623,7 +695,7 @@ export function NewCasePage() {
                       </button>
                     </div>
                   )}
-                  {isIdentity && separateBundle && existingBundleId && (
+                  {isIdentity && separateBundle && existingBundleId && !isPrivateUpload && (
                     <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs flex items-center justify-between gap-2">
                       <span>A separate bundle will be created for this upload.</span>
                       <button

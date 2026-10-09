@@ -36,7 +36,7 @@ from app.models.case import Case, is_identity_case_type
 from app.models.document import Document
 from app.models.family import RELATION_SELF, Family, FamilyMember
 from app.models.user import User, UserRole, has_rank
-from app.services import family_checks
+from app.services import family_checks, token_revocation
 from app.services.audit_service import record_event
 from app.services.case_profile import load_profile
 from app.services.translation_service import normalize_language, translate
@@ -167,6 +167,8 @@ def _set_login_state(
             user.hashed_password = hash_password(password)
             user.must_change_password = True
         system_db.commit()
+        if password is not None:
+            token_revocation.revoke_all_for_user(user_id)
 
 
 def _credentials(member: FamilyMember, user: User, temporary_password: str | None) -> dict[str, Any]:
@@ -205,7 +207,8 @@ def _own_member(family: Family, member_id: uuid.UUID) -> FamilyMember:
 def member_identity_cases(db: Session, family: Family, member: FamilyMember) -> list[Case]:
     """A member's identity bundles, oldest first. The head's also include
     identity cases the head submitted without naming a member."""
-    cases = [c for c in member.cases if is_identity_case_type(c.case_type)]
+    # A private case emptied at sign-out holds nothing to check or add to.
+    cases = [c for c in member.cases if is_identity_case_type(c.case_type) and c.data_removed_at is None]
     if member.relation == RELATION_SELF:
         standalone_cases = db.execute(
             select(Case).where(
@@ -214,7 +217,11 @@ def member_identity_cases(db: Session, family: Family, member: FamilyMember) -> 
                 Case.company_id == family.company_id,
             )
         ).scalars().all()
-        cases.extend([c for c in standalone_cases if is_identity_case_type(c.case_type) and c not in cases])
+        cases.extend(
+            c
+            for c in standalone_cases
+            if is_identity_case_type(c.case_type) and c.data_removed_at is None and c not in cases
+        )
     cases.sort(key=lambda c: c.created_at)
     return cases
 
@@ -293,6 +300,7 @@ def _view(db: Session, family: Family, language: str) -> dict[str, Any]:
                                 "filename": d.original_filename,
                                 "document_type": d.document_type,
                                 "processing_status": d.processing_status.value,
+                                "file_deleted": d.file_deleted_at is not None,
                             }
                             for d in documents_by_case[c.id]
                         ],
@@ -371,6 +379,7 @@ def get_my_membership(user: User = Depends(_member), db: Session = Depends(get_t
                         "filename": d.original_filename,
                         "document_type": d.document_type,
                         "processing_status": d.processing_status.value,
+                        "file_deleted": d.file_deleted_at is not None,
                     }
                     for d in documents[c.id]
                 ],

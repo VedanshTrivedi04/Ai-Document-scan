@@ -14,8 +14,9 @@ not used by anything yet.
 """
 import enum
 import uuid
+from datetime import datetime
 
-from sqlalchemy import JSON, Enum, ForeignKey, String
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -137,6 +138,14 @@ class Case(TenantScopedMixin, UUIDPrimaryKeyMixin, TimestampMixin, Base):
     comparison_member_ids: Mapped[list | None] = mapped_column(
         JSONB().with_variant(JSON(), "sqlite"), nullable=True
     )
+    # A private upload: the submitter asked for this case's files and everything
+    # read from them to be removed when they sign out (or their session runs
+    # out). `data_removed_at` is when that happened; the emptied case stays as a
+    # record (app/services/retention_service.py).
+    delete_on_logout: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    data_removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     submitted_by = relationship(
         "User", back_populates="submitted_cases", foreign_keys=[submitted_by_user_id]
