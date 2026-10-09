@@ -42,11 +42,14 @@ CORE RULE: STRICT 2 TO 3 LINES BREVITY & ROLE FOCUS (CRITICAL):
    - You are NOT a doctor, medical app, or general internet directory. Never prescribe medicine, dosages, or medical tips.
    - If user asks about doctors, medicine, health, or non-document topics:
      Politely say in 1-2 lines that as Sarthi AI, you specialize strictly in document verification, and suggest they visit a local clinic, doctor, or helpline (108/112). Mention they can share document photos whenever they need them verified.
-3. FOR APPOINTMENT QUERIES:
+3. FOR RISK SCORE & SEVERITY QUESTIONS:
+   - State their exact Risk Score (e.g. 80/100) and Risk Tier (HIGH / MEDIUM / LOW).
+   - Explain what the score/severity means in 1-2 concise lines.
+4. FOR APPOINTMENT QUERIES:
    - Answer in 2 lines max: State your role, direct them to official portal (UIDAI appointments.uidai.gov.in / 1947), and invite them to verify documents before their visit.
-4. FOR GREETINGS / CHIT-CHAT:
+5. FOR GREETINGS / CHIT-CHAT:
    - Greet politely in 1-2 lines and explain your document verification capability.
-5. LANGUAGE POLICY:
+6. LANGUAGE POLICY:
    - Mirror the citizen's language (Hindi, Hinglish, English, etc.) naturally and politely.
 
 ANTI-HALLUCINATION FOR VERIFICATION:
@@ -194,6 +197,12 @@ def _build_grounded_context(session_context: Dict[str, Any]) -> str:
         case_ref = last_result.get("case_number")
         if case_ref:
             parts.append(f"\nDocSure Platform Case Reference: {case_ref}")
+
+        risk = last_result.get("risk_assessment") or {}
+        if risk:
+            parts.append(
+                f"Risk Assessment: Score {risk.get('score', 0)}/100 | Tier: {risk.get('tier', 'LOW')} | Verdict: {risk.get('verdict')}"
+            )
 
         profile = last_result.get("profile", {})
         if profile and profile.get("fields"):

@@ -8,10 +8,83 @@ Features:
 
 from typing import Dict, Any, List, Optional
 
+
+def calculate_risk_assessment(
+    conflicts: List[Dict[str, Any]],
+    harmless_variants: List[Dict[str, Any]],
+    quality_warnings: Optional[List[str]] = None,
+    backend_score: Optional[int] = None,
+    backend_tier: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Computes an audit-grade risk score (0 - 100) and risk tier matching the DocSure platform.
+    """
+    if backend_score is not None and backend_tier:
+        tier_str = str(backend_tier).upper()
+        tier_label = "🔴 HIGH RISK" if tier_str == "HIGH" else ("🟡 MEDIUM RISK" if tier_str == "MEDIUM" else "🟢 LOW RISK")
+        verdict = (
+            "Action Required (High Rejection Probability)" if tier_str == "HIGH"
+            else ("Review Advised (Minor Discrepancies)" if tier_str == "MEDIUM" else "Clean Match (Safe to Proceed)")
+        )
+        return {
+            "score": backend_score,
+            "tier": tier_str,
+            "tier_label": tier_label,
+            "verdict": verdict,
+        }
+
+    score = 0
+    reasons = []
+
+    for c in conflicts:
+        sev = str(c.get("severity", "HIGH")).upper()
+        if sev in ("CRITICAL", "VERY HIGH"):
+            score += 45
+            reasons.append(f"Critical conflict: {c.get('field', 'Field')}")
+        elif sev == "HIGH":
+            score += 35
+            reasons.append(f"High severity conflict: {c.get('field', 'Field')}")
+        elif sev == "MEDIUM":
+            score += 20
+            reasons.append(f"Medium discrepancy: {c.get('field', 'Field')}")
+        else:
+            score += 10
+            reasons.append(f"Discrepancy: {c.get('field', 'Field')}")
+
+    for _ in harmless_variants:
+        score += 5
+
+    if quality_warnings:
+        score += min(len(quality_warnings) * 10, 20)
+
+    score = min(max(score, 0), 100)
+
+    if score >= 70 or any(str(c.get("severity", "")).upper() in ("CRITICAL", "HIGH") for c in conflicts):
+        tier = "HIGH"
+        tier_label = "🔴 HIGH RISK"
+        verdict = "Action Required (High Rejection Probability)"
+    elif score >= 25 or any(str(c.get("severity", "")).upper() == "MEDIUM" for c in conflicts):
+        tier = "MEDIUM"
+        tier_label = "🟡 MEDIUM RISK"
+        verdict = "Review Advised (Minor Discrepancies)"
+    else:
+        tier = "LOW"
+        tier_label = "🟢 LOW RISK"
+        verdict = "Clean Match (Safe to Proceed)"
+
+    return {
+        "score": score,
+        "tier": tier,
+        "tier_label": tier_label,
+        "verdict": verdict,
+        "reasons": reasons,
+    }
+
+
 def format_citizen_report(data: Dict[str, Any], lang: str = "hi") -> str:
     """
     Takes verification result dictionary for a document bundle (up to 5 documents)
-    and formats it into an easy-to-read, structured Telegram report.
+    and formats it into an easy-to-read, structured Telegram report with Risk Score and Severity badges.
     """
     total_docs = data.get("total_documents_scanned", 2)
     scanned_docs = data.get("scanned_documents", [])
@@ -20,6 +93,18 @@ def format_citizen_report(data: Dict[str, Any], lang: str = "hi") -> str:
     conflicts = data.get("conflicts", [])
 
     case_num = data.get("case_number")
+    risk_info = data.get("risk_assessment")
+    if not risk_info:
+        raw_c = data.get("raw_case") or {}
+        b_score = raw_c.get("risk_score")
+        b_tier = raw_c.get("risk_tier")
+        risk_info = calculate_risk_assessment(conflicts, harmless_variants, data.get("quality_warnings"), b_score, b_tier)
+        data["risk_assessment"] = risk_info
+
+    score = risk_info.get("score", 0)
+    tier_label = risk_info.get("tier_label", "🟢 LOW RISK")
+    verdict = risk_info.get("verdict", "Safe to Proceed")
+
     lines = [
         "══════════════════════════",
         "🇮🇳 *SARTHI CITIZEN ASSISTANT*",
@@ -27,7 +112,11 @@ def format_citizen_report(data: Dict[str, Any], lang: str = "hi") -> str:
         "══════════════════════════\n"
     ]
     if case_num:
-        lines.append(f"📌 *DocSure Case Reference:* `{case_num}`\n")
+        lines.append(f"📌 *DocSure Case Reference:* `{case_num}`")
+
+    lines.append(f"🎯 *Risk Assessment:*")
+    lines.append(f"  • *Risk Score:* `{score}/100`  |  *Tier:* *{tier_label}*")
+    lines.append(f"  • *Status:* _{verdict}_\n")
 
     # Scanned documents overview
     if scanned_docs:
@@ -47,11 +136,21 @@ def format_citizen_report(data: Dict[str, Any], lang: str = "hi") -> str:
             val1 = conf.get("doc1_value", "N/A")
             d2_name = conf.get("doc2_name", "Document 2")
             val2 = conf.get("doc2_value", "N/A")
-            severity = conf.get("severity", "HIGH")
+            severity_str = str(conf.get("severity", "HIGH")).upper()
             msg = conf.get("message", "Contradiction detected")
             reason = conf.get("reason", "")
 
-            lines.append(f"*{idx}. {field}* [Severity: *{severity}*]")
+            # Visual Severity Badge
+            if severity_str in ("CRITICAL", "VERY HIGH"):
+                sev_badge = "🔴 CRITICAL"
+            elif severity_str == "HIGH":
+                sev_badge = "🟠 HIGH"
+            elif severity_str == "MEDIUM":
+                sev_badge = "🟡 MEDIUM"
+            else:
+                sev_badge = "🟢 LOW"
+
+            lines.append(f"*{idx}. {field}* [Severity: *{sev_badge}*]")
             lines.append(f"  • *{d1_name}:* `{val1}`")
             lines.append(f"  • *{d2_name}:* `{val2}`")
             lines.append(f"  • *Reason:* _{msg}_")
@@ -75,14 +174,14 @@ def format_citizen_report(data: Dict[str, Any], lang: str = "hi") -> str:
             val2 = h.get("doc2_value", "")
             msg = h.get("message") or h.get("reason", "Spelling ya format difference")
 
-            lines.append(f"  • *{field}:*")
+            lines.append(f"  • *{field}* [Severity: *🟢 LOW (Safe)*]")
             if val1 and val2:
                 lines.append(f"    ↳ `{val1}` ({d1_name}) vs `{val2}` ({d2_name})")
             lines.append(f"    ↳ _{msg}_\n")
 
     # Clean Matches
     if matches:
-        lines.append("✅ *EXACT MATCHES:*")
+        lines.append("✅ *EXACT MATCHES:* [Severity: *🟢 SAFE*]")
         for m in matches:
             lines.append(f"  • {m}")
         lines.append("")

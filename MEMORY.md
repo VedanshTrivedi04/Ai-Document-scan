@@ -2048,6 +2048,49 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Push: Successful (`origin/feat/telegram-chatbot`)
 - Status: Complete
 
+---
+
+### 2026-10-09 17:53
+
+**User Request**
+> "baki chize bhi dal do like servility or risk score etc"
+
+**Exploration**
+- Inspected backend risk scoring model (`app.services.risk_scoring_service`) and document report schemas:
+  - Cases in the platform calculate a transparent Risk Score (0 - 100), Risk Tier (`LOW`, `MEDIUM`, `HIGH`), and severity rankings (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
+  - Previously, the Telegram bot only displayed the raw contradiction text without an explicit top-level Risk Score, Risk Tier, or distinct severity visual badges.
+
+**Work Done**
+- `chatbot/explainer.py`:
+  - Added `calculate_risk_assessment()`: computes weighted risk score (0-100), tier (`🔴 HIGH RISK`, `🟡 MEDIUM RISK`, `🟢 LOW RISK`), and verdict matching the backend engine rules.
+  - Updated `format_citizen_report()`:
+    - Added prominent top-level Risk Assessment card: `🎯 Risk Score: X/100 | Tier: [TIER_BADGE] | Status: Verdict`.
+    - Added visual severity badges on each conflict: `[Severity: 🔴 CRITICAL]`, `[Severity: 🟠 HIGH]`, `[Severity: 🟡 MEDIUM]`, `[Severity: 🟢 LOW (Safe)]`.
+    - Labeled exact matches with `[Severity: 🟢 SAFE]`.
+- `chatbot/verification_client.py`:
+  - Integrated `calculate_risk_assessment` into both `verify_via_backend_api` and `run_backend_comparison`.
+  - Returned `risk_assessment`, `risk_score`, and `risk_tier` in the canonical verification result object.
+- `chatbot/chat_service.py`:
+  - Added `Risk Assessment: Score X/100 | Tier | Verdict` into `_build_grounded_context`.
+  - Added instruction in `SYSTEM_PERSONA` enabling Sarthi AI to answer citizen queries regarding their risk score and severity in 1-2 crisp lines.
+
+**Files Changed**
+- `chatbot/explainer.py`: Added risk score calculation, risk tier, and severity badges in citizen report.
+- `chatbot/verification_client.py`: Attached risk assessment data to all verification outcomes.
+- `chatbot/chat_service.py`: Grounded AI context in risk score and severity.
+- `MEMORY.md`: Documented interaction log and verification details.
+
+**Verification**
+- Validated all Python modules with `py_compile`.
+- Tested verification report on demo bundles:
+  - `T05`: Risk Score `35/100`, Tier `🔴 HIGH RISK`, Date of Birth `[Severity: 🟠 HIGH]`.
+  - `T01`: Risk Score `0/100`, Tier `🟢 LOW RISK`, Exact Matches `[Severity: 🟢 SAFE]`.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Status: Staged and committed.
+
+
 
 
 

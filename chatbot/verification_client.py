@@ -882,7 +882,13 @@ def verify_via_backend_api(doc_paths: List[Path], lang: str = "hi") -> Optional[
                 if pfield.get("status") == "agreed" and pfield.get("value"):
                     label = pfield.get("label") or pfield.get("field", "").title()
                     val = pfield.get("display_value") or pfield.get("value")
-                    matches.append(f"{label}: {val} (Verified Match)")
+        from explainer import calculate_risk_assessment
+        risk_info = calculate_risk_assessment(
+            conflicts,
+            harmless_variants,
+            backend_score=case_detail.get("risk_score"),
+            backend_tier=case_detail.get("risk_tier"),
+        )
 
         return {
             "source": "backend_api",
@@ -895,6 +901,9 @@ def verify_via_backend_api(doc_paths: List[Path], lang: str = "hi") -> Optional[
             "harmless_variants": harmless_variants,
             "conflicts": conflicts,
             "profile": profile_data,
+            "risk_assessment": risk_info,
+            "risk_score": risk_info.get("score", 0),
+            "risk_tier": risk_info.get("tier", "LOW"),
             "raw_case": case_detail,
         }
     except Exception as e:
@@ -999,6 +1008,9 @@ def run_backend_comparison(doc_paths: List[Path]) -> Dict[str, Any]:
     if not any(c.get("field") == "Parent Or Spouse Name" for c in conflicts):
         matches.append("Parent / Spouse Name: Match")
 
+    from explainer import calculate_risk_assessment
+    risk_info = calculate_risk_assessment(conflicts, harmless_variants)
+
     return {
         "status": "CONTRADICTION_FOUND" if conflicts else "ALL_CLEARED",
         "total_documents_scanned": len(documents),
@@ -1006,6 +1018,9 @@ def run_backend_comparison(doc_paths: List[Path]) -> Dict[str, Any]:
         "matches": matches,
         "harmless_variants": harmless_variants,
         "conflicts": conflicts,
+        "risk_assessment": risk_info,
+        "risk_score": risk_info.get("score", 0),
+        "risk_tier": risk_info.get("tier", "LOW"),
     }
 
 
