@@ -1859,9 +1859,37 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Commit: `ac68161` (`feat: connect Telegram chatbot to live DocSure backend endpoints and enhance multilingual AI assistant`)
+- Commit: `3079e06` (`feat: connect Telegram chatbot to live DocSure backend endpoints and enhance multilingual AI assistant`)
 - Push: Successful (`origin/feat/telegram-chatbot`)
 - Status: Complete
+
+---
+
+### 2026-10-09 17:08
+
+**User Request**
+> "@[TerminalName: python, ProcessId: 824] see" (Telegram bot 409 Conflict error in terminal)
+
+**Exploration**
+- Inspected Terminal 824 output:
+  - Error: `telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running`.
+  - Cause: In the previous turn, the agent started a background daemon task (`task-417`) running `python chatbot/bot.py` while the user simultaneously ran `C:\Python314\python.exe chatbot/bot.py` in Terminal 824 (PID 41608).
+  - Telegram Bot API strictly allows only one active polling client per bot token; concurrent `getUpdates` requests trigger HTTP 409 Conflict.
+
+**Work Done**
+- Immediately terminated the duplicate background agent task (`task-417`).
+- Confirmed single remaining process running: PID 41608 in Terminal 824.
+- `python-telegram-bot` automatically resumes polling after retry backoff now that the conflicting process is gone.
+
+**Verification**
+- Checked active Python processes: only PID 41608 remains active and running.
+- No remaining background tasks or duplicate polling instances.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Commit: Documented in memory.
+- Status: Clean.
+
 
 
 
