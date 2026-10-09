@@ -2092,6 +2092,49 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Push: Successful (`origin/feat/telegram-chatbot`)
 - Status: Complete
 
+---
+
+### 2026-10-09 21:05
+
+**User Request**
+> "take the pull" / "continue"
+
+**Exploration**
+- Inspected remotes and branches:
+  - Branch `feat/telegram-chatbot` was checked against `origin/feat/telegram-chatbot`.
+  - Remote tracking branch `origin/main` contained 8 newer commits from team members (`kanhaiyapatidar28`, `VedanshTrivedi04`) that were not yet present in local `main` or `feat/telegram-chatbot`:
+    - Updated DocSure branding, landing page, realistic auth report, new logo/favicon, lenis smooth scroll, and static demo assets.
+- Switched to `main` and ran `git pull origin main` to bring local `main` fully up to date with `origin/main`.
+- Switched back to `feat/telegram-chatbot` and merged `main` into `feat/telegram-chatbot`.
+- Resolved merge conflicts:
+  - `frontend/src/lib/appInfo.ts`: Aligned `APP_NAME = "Docsure"` with main.
+  - `frontend/public/logo.png`: Accepted updated DocSure branding asset from main.
+  - `sample-documents/identity-bundles.zip`: Accepted latest generated bundle archive from main.
+
+**Work Done**
+- Executed `git fetch --all`.
+- Updated local `main` with `git pull origin main`.
+- Merged latest `main` into `feat/telegram-chatbot`.
+- Resolved 3 merge conflicts and created merge commit `213c17a`.
+- Verified syntax of all chatbot scripts (`py_compile`).
+
+**Files Changed**
+- `frontend/src/lib/appInfo.ts`: Resolved merge conflict, setting `APP_NAME = "Docsure"`.
+- `frontend/public/logo.png`: Replaced with updated DocSure logo from main.
+- `sample-documents/identity-bundles.zip`: Updated bundle archive from main.
+- `memory.md`: Documented pull, branch synchronization, and merge details.
+
+**Verification**
+- Verified `chatbot/*.py` with `python -m py_compile` (0 errors).
+- Clean `git status`.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Commit: `213c17a` (`Merge branch 'main' into feat/telegram-chatbot`)
+- Push: In progress
+- Status: Complete
+
+
 
 
 
