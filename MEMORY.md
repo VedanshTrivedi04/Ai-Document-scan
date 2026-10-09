@@ -1609,3 +1609,29 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Branch: `feat/telegram-chatbot`
 - Commit: d30ba91 (fix: implement resilient multi-model vision cascade and pdf support)
 - Push: Successful (origin/feat/telegram-chatbot)
+
+---
+
+### 2026-10-09 15:47
+
+**User Request**
+> "rebase with main"
+
+**Exploration**
+- Checked git status: `main` was updated with remote changes (`c8ed6b2..323e4c2`).
+- Latest commit on `main` is `323e4c2` (`fix: ensure strict case-level document isolation and remove case reuse logic`).
+- Found `feat/telegram-chatbot` diverged from `main` by 22 commits.
+
+**Work Done**
+- Executed `git rebase main` on `feat/telegram-chatbot`.
+- Successfully rebased all 22 commits onto `323e4c2` cleanly with zero conflicts.
+- Updated `.gitignore` to ignore local model weight files (`backend/models/`, `*.onnx`).
+
+**Verification**
+- `git merge-base main feat/telegram-chatbot` returned `323e4c2` (main HEAD).
+- Verified working tree clean.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Base: `323e4c2` (main)
+- Push: Pending force push with lease
