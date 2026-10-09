@@ -126,21 +126,36 @@ async def demo_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     report = format_citizen_report(result)
     await update.message.reply_text(f"📌 *{title}*\n\n" + report, parse_mode=ParseMode.MARKDOWN)
 
+async def _safe_reply(update: Update, text: str, reply_markup=None):
+    """Replies with Markdown, falling back to clean plain text if Telegram Markdown parsing fails."""
+    try:
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
+    except Exception as e:
+        logger.warning(f"Markdown reply failed ({e}), sending plain text")
+        plain = text.replace("*", "").replace("`", "").replace("_", "")
+        await update.message.reply_text(plain, reply_markup=reply_markup)
+
+
 async def handle_document_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Collects incoming documents, buffering multi-photo albums cleanly."""
+    try:
+        await update.message.chat.send_action("upload_document")
+    except Exception:
+        pass
+
     doc_paths = context.user_data.setdefault("doc_paths", [])
 
     if len(doc_paths) >= MAX_DOCS:
-        await update.message.reply_text(
+        await _safe_reply(
+            update,
             f"⚠️ Aap pehle hi adhiktam *{MAX_DOCS} dastavej* upload kar chuke hain. "
-            f"Kripya jaanch shuru karne ke liye *'{VERIFY_BUTTON_TEXT}'* dabayein.",
-            parse_mode=ParseMode.MARKDOWN
+            f"Kripya jaanch shuru karne ke liye *'{VERIFY_BUTTON_TEXT}'* dabayein."
         )
         return COLLECTING_DOCS
 
     saved_path = await _save_incoming_media(update, context, f"doc_{len(doc_paths) + 1}")
     if not saved_path:
-        await update.message.reply_text("⚠️ Kripya document ki saaf photo ya image file bhejiye.")
+        await _safe_reply(update, "⚠️ Kripya document ki saaf photo ya image file bhejiye.")
         return COLLECTING_DOCS
 
     # Phase 4 Quality Check
@@ -151,7 +166,6 @@ async def handle_document_upload(update: Update, context: ContextTypes.DEFAULT_T
 
     doc_paths.append(saved_path)
     context.user_data["doc_paths"] = doc_paths
-    count = len(doc_paths)
 
     previous_task = context.user_data.get("debounce_task")
     if previous_task and not previous_task.done():
@@ -169,85 +183,87 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
     except asyncio.CancelledError:
         return
 
-    doc_paths = context.user_data.get("doc_paths", [])
-    q_warnings = context.user_data.get("quality_warnings", [])
-    count = len(doc_paths)
+    try:
+        doc_paths = context.user_data.get("doc_paths", [])
+        q_warnings = context.user_data.get("quality_warnings", [])
+        count = len(doc_paths)
 
-    # Phase 1: Real Live Extraction Preview for Citizen
-    extracted_previews = []
-    extracted_docs = []
-    for idx, path in enumerate(doc_paths):
-        try:
-            bdoc = extract_document_fields(path, idx + 1)
-            extracted_docs.append(bdoc)
-            extracted_previews.append(get_document_preview_summary(bdoc, idx + 1))
-        except Exception as e:
-            logger.error(f"Error extracting preview for doc {idx+1}: {e}")
-            extracted_previews.append(f"📄 *Dastavej {idx+1}:* Prapt hua")
+        # Phase 1: Real Live Extraction Preview for Citizen
+        extracted_previews = []
+        extracted_docs = []
+        for idx, path in enumerate(doc_paths):
+            try:
+                bdoc = extract_document_fields(path, idx + 1)
+                extracted_docs.append(bdoc)
+                extracted_previews.append(get_document_preview_summary(bdoc, idx + 1))
+            except Exception as e:
+                logger.error(f"Error extracting preview for doc {idx+1}: {e}", exc_info=True)
+                extracted_previews.append(f"📄 *Dastavej {idx+1}:* Prapt hua ({path.name})")
 
-    context.user_data["extracted_docs"] = extracted_docs
-    docs_preview_text = "\n\n".join(extracted_previews)
+        context.user_data["extracted_docs"] = extracted_docs
+        docs_preview_text = "\n\n".join(extracted_previews)
 
-    quality_banner = ""
-    if q_warnings:
-        # Show top 2 distinct warnings
-        distinct_warns = list(dict.fromkeys(q_warnings))[:2]
-        quality_banner = "\n\n🔍 *Quality Notice:*\n" + "\n".join(f"  {w}" for w in distinct_warns)
+        quality_banner = ""
+        if q_warnings:
+            distinct_warns = list(dict.fromkeys(q_warnings))[:2]
+            quality_banner = "\n\n🔍 *Quality Notice:*\n" + "\n".join(f"  {w}" for w in distinct_warns)
 
-    if count >= MAX_DOCS:
-        await update.message.reply_text(
-            f"✅ *Adhiktam {MAX_DOCS} dastavej prapt ho gaye!*\n\n"
-            f"{docs_preview_text}"
-            f"{quality_banner}\n\n"
-            "⏳ *Cross-Document Contradiction Engine shuru ho raha hai...*",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        await _trigger_verification(update, context)
-        return
+        if count >= MAX_DOCS:
+            msg = (
+                f"✅ *Adhiktam {MAX_DOCS} dastavej prapt ho gaye!*\n\n"
+                f"{docs_preview_text}"
+                f"{quality_banner}\n\n"
+                "⏳ *Cross-Document Contradiction Engine shuru ho raha hai...*"
+            )
+            await _safe_reply(update, msg, reply_markup=ReplyKeyboardRemove())
+            await _trigger_verification(update, context)
+            return
 
-    if count >= 2:
-        keyboard = [
-            [VERIFY_BUTTON_TEXT],
-            ["➕ Aur Dastavej Bhejein", "🔄 Nayi Jaanch (/start)"]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        msg = (
-            f"✅ *Dastavej {count} Scanned!*\n\n"
-            f"{docs_preview_text}"
-            f"{quality_banner}\n\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"📊 Bundle: *{count}/{MAX_DOCS} Dastavej Prapt*\n\n"
-            "👉 Aap chahein to aur dastavej (jaise PAN / Address Proof) bhej sakte hain,\n"
-            f"YA niche *'{VERIFY_BUTTON_TEXT}'* dabakar sabhi dastavejon ka aapas me milan check karein!"
-        )
-        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
-    else:
-        keyboard = [
-            ["➕ Agla Dastavej Bhejein", "🔄 Nayi Jaanch (/start)"]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        msg = (
-            f"✅ *Pehla Dastavej Scan Ho Gaya!*\n\n"
-            f"{docs_preview_text}"
-            f"{quality_banner}\n\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            "📄 *Agla Kadam:* Kripya dusra dastavej (jaise PAN Card ya Address Proof) bhejiye taaki dono ke beech milan (Cross-Verification) ho sake."
-        )
-        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
+        if count >= 2:
+            keyboard = [
+                [VERIFY_BUTTON_TEXT],
+                ["➕ Aur Dastavej Bhejein", "🔄 Nayi Jaanch (/start)"]
+            ]
+            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            msg = (
+                f"✅ *Dastavej {count} Scanned!*\n\n"
+                f"{docs_preview_text}"
+                f"{quality_banner}\n\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                f"📊 Bundle: *{count}/{MAX_DOCS} Dastavej Prapt*\n\n"
+                "👉 Aap chahein to aur dastavej (jaise PAN / Address Proof) bhej sakte hain,\n"
+                f"YA niche *'{VERIFY_BUTTON_TEXT}'* dabakar sabhi dastavejon ka aapas me milan check karein!"
+            )
+            await _safe_reply(update, msg, reply_markup=reply_markup)
+        else:
+            keyboard = [
+                ["➕ Agla Dastavej Bhejein", "🔄 Nayi Jaanch (/start)"]
+            ]
+            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            msg = (
+                f"✅ *Pehla Dastavej Scan Ho Gaya!*\n\n"
+                f"{docs_preview_text}"
+                f"{quality_banner}\n\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "📄 *Agla Kadam:* Kripya dusra dastavej (jaise PAN Card ya Address Proof) bhejiye taaki dono ke beech milan (Cross-Verification) ho sake."
+            )
+            await _safe_reply(update, msg, reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"Error in _debounced_upload_summary: {e}", exc_info=True)
+        await _safe_reply(update, f"✅ Dastavej prapt ho gaya ({len(context.user_data.get('doc_paths', []))} files). Kripya 'Verify' dabayein ya aur document bhejiye.")
 
 async def handle_verify_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Triggered when citizen clicks verify button or types /done."""
     doc_paths = context.user_data.get("doc_paths", [])
     if len(doc_paths) < 2:
-        await update.message.reply_text(
-            "⚠️ Bundle jaanch ke liye kam se kam *2 dastavej* zaroori hain. Kripya ek aur photo bhejiye.",
-            parse_mode=ParseMode.MARKDOWN
+        await _safe_reply(
+            update,
+            "⚠️ Bundle jaanch ke liye kam se kam *2 dastavej* zaroori hain. Kripya ek aur photo bhejiye."
         )
         return COLLECTING_DOCS
 
     await _trigger_verification(update, context)
-    return ConversationHandler.END
+    return COLLECTING_DOCS
 
 async def _trigger_verification(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Executes backend bundle verification and sends report on the spot."""
@@ -274,8 +290,12 @@ async def _trigger_verification(update: Update, context: ContextTypes.DEFAULT_TY
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-        await processing_msg.delete()
-        await update.message.reply_text(report_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
+        try:
+            await processing_msg.delete()
+        except Exception:
+            pass
+
+        await _safe_reply(update, report_text, reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"Error during bundle verification: {e}", exc_info=True)
         await processing_msg.edit_text(
@@ -442,27 +462,24 @@ def main():
     
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).request(t_request).build()
 
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start_command)],
-        states={
-            COLLECTING_DOCS: [
-                MessageHandler(filters.Regex(r"(?i)(verify|jaanch)"), handle_verify_request),
-                CommandHandler("done", handle_verify_request),
-                MessageHandler(filters.PHOTO | filters.Document.ALL, handle_document_upload),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_chat_message),
-            ],
-        },
-        fallbacks=[
-            CommandHandler("cancel", cancel_command),
-            CommandHandler("clear", cancel_command),
-        ],
-    )
-
+    # Direct Unconditional Handlers (Never drops media uploads or button clicks)
+    app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("demo", demo_command))
     app.add_handler(CommandHandler("scheme", scheme_command))
     app.add_handler(CommandHandler("profile", profile_command))
-    app.add_handler(conv_handler)
+    app.add_handler(CommandHandler("cancel", cancel_command))
+    app.add_handler(CommandHandler("clear", cancel_command))
+    app.add_handler(CommandHandler("done", handle_verify_request))
+    app.add_handler(CommandHandler("verify", handle_verify_request))
+
+    # Media uploads (Photos, Scanned PDFs, Documents) - active at all times
+    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_document_upload))
+
+    # Verification triggers & button clicks
+    app.add_handler(MessageHandler(filters.Regex(r"(?i)(verify|jaanch)"), handle_verify_request))
+
+    # Conversational LLM queries (Groq AI)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_chat_message))
 
     print("✅ Bot is online and directly connected to backend engine!")

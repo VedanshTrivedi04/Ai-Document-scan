@@ -1500,15 +1500,38 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Commit: `f32f4ce` (`feat: align bot intake and cross-check report with website UI and multi-doc flow`)
 - Push: Successful (`origin/feat/telegram-chatbot`)
 
+---
 
+### 2026-10-09 14:15
 
+**User Request**
+> "hubva kya tha kyu problem ari thi ?" (Why did the problem happen / why was there no response when uploading documents?)
 
+**Exploration**
+- Examined Terminal 824 process logs and `chatbot/bot.py` handler architecture.
+- Identified exact root cause:
+  1. `ConversationHandler` state gate: Media uploads (`filters.PHOTO | filters.Document.ALL`) were registered strictly inside `conv_handler` under state `COLLECTING_DOCS`.
+  2. When the bot was restarted in terminal, `python-telegram-bot` reset in-memory conversation states to `None`.
+  3. The entry point was strictly `/start`. Because the user directly uploaded documents or chatted without re-triggering `/start`, the conversation handler remained inactive.
+  4. Outside `conv_handler`, only `filters.TEXT` (Groq conversational handler) was registered globally. Thus, text questions worked and triggered Groq, but photo/PDF uploads matched no active handler and were silently dropped by python-telegram-bot.
 
+**Work Done**
+- Refactored `chatbot/bot.py` `main()`:
+  - Removed state-machine restriction (`ConversationHandler`) and registered direct, top-level handlers for all actions.
+  - `MessageHandler(filters.PHOTO | filters.Document.ALL, handle_document_upload)` is now globally active at all times.
+  - Added direct command handlers for `/start`, `/help`, `/demo`, `/scheme`, `/profile`, `/cancel`, `/clear`, `/done`, and `/verify`.
+  - Added button and regex triggers for verification (`r"(?i)(verify|jaanch)"`).
+  - Safe-reply fallback handles Markdown escaping exceptions gracefully.
 
+**Files Changed**
+- `chatbot/bot.py`: Replaced `ConversationHandler` with global top-level handlers to prevent media drops.
+- `memory.md`: Documented root cause and fix.
 
+**Verification**
+- Compiled `chatbot/bot.py` via `py_compile` (0 errors).
+- Validated handler registration order: Commands -> Media -> Regex (Verify) -> Text (Groq LLM).
 
-
-
-
-
-
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Commit: Pending
+- Push: Pending
