@@ -1497,8 +1497,8 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Commit: Pending staging and commit.
-- Push: Pending.
+- Commit: `f32f4ce` (`feat: align bot intake and cross-check report with website UI and multi-doc flow`)
+- Push: Successful (`origin/feat/telegram-chatbot`)
 
 
 
