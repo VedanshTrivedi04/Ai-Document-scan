@@ -2134,6 +2134,45 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Push: Successful (`origin/feat/telegram-chatbot`)
 - Status: Complete
 
+---
+
+### 2026-10-10 04:43
+
+**User Request**
+> Deploy the project for free — frontend and backend both on Render. Is Render best? Redis on Upstash? Database already on Neon.
+
+**Exploration**
+- `docker-compose.yml`: already points to Neon for DB; Redis is local container; backend/worker/frontend all containerised
+- `backend/Dockerfile`: Python 3.12-slim, installs Tesseract (eng+hin), `start-api.sh` command
+- `backend/.env.example`: built-in free provider switches — `STORAGE_PROVIDER=local`, `OCR_PROVIDER=local`, `LLM_PROVIDER=openai_compatible` + Gemini URL
+- `backend/start-api.sh`: runs alembic upgrade → seed → uvicorn
+- `backend/start-worker.sh`: one queue per invocation; 4 separate workers in production
+- `frontend/Dockerfile`: multi-stage Node→Nginx; uses `nginx.conf.template`
+- `frontend/nginx.conf.template`: proxies `/api/` → `${API_UPSTREAM}/` — this env var is the Render backend URL
+
+**Work Done**
+- Created `backend/start-all-workers.sh` — single Celery process, all queues, threads pool, concurrency=2 (fits Render free 512 MB RAM)
+- Created `render.yaml` — Render Blueprint defining all 3 services (fddt-backend, fddt-worker, fddt-frontend) with free provider env vars pre-filled; secrets marked `sync: false`
+
+**Files Changed**
+- `backend/start-all-workers.sh` (created) — combined Celery worker for Render free tier
+- `render.yaml` (created) — Render Blueprint for one-click deploy from GitHub
+
+**Verification**
+- Not deployed — owner must provide Neon URL, Upstash Redis URL, JWT_SECRET_KEY, Gemini API key in Render dashboard
+- `render.yaml` structure validated against Render Blueprint YAML spec
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Commit: see below
+- Push: see below
+- Status: pending
+
+**Notes**
+- After first backend deploy: copy the `https://fddt-backend.onrender.com` URL and update `API_UPSTREAM` in the frontend env vars
+- Render free sleeps after 15 min inactivity — use UptimeRobot (free) to ping `/health` every 5 min during demo
+- Upstash Redis TLS: all three Redis vars must use `rediss://` (double-s) + `?ssl_cert_reqs=none`
+- `STORAGE_PROVIDER=local` = ephemeral files; fine for hackathon demo
 
 
 

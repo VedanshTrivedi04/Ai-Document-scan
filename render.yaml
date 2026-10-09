@@ -1,0 +1,265 @@
+# render.yaml — Render Blueprint for FDDT / Contradiction Detector
+# Defines 3 services: backend API, Celery worker, frontend.
+# Connect your GitHub repo at https://dashboard.render.com/select-repo?type=blueprint
+# and Render will create all three at once.
+#
+# BEFORE DEPLOYING — set these environment variable values in the Render dashboard
+# (they are marked sync: false below so Render never stores them in this file):
+#   DATABASE_URL                 — Neon connection string (pooled)
+#   DATABASE_APP_PASSWORD        — password for fddt_app role
+#   DATABASE_PLATFORM_PASSWORD   — password for fddt_platform role
+#   REDIS_URL                    — Upstash rediss:// URL  (db 0)
+#   CELERY_BROKER_URL            — same as REDIS_URL
+#   CELERY_RESULT_BACKEND        — same host, db 1
+#   JWT_SECRET_KEY               — long random string (64+ chars)
+#   LLM_API_KEY                  — Google AI Studio key (aistudio.google.com)
+
+services:
+  # ─────────────────────────────────────────────────────────────
+  # 1. Backend API  (FastAPI + Uvicorn)
+  # ─────────────────────────────────────────────────────────────
+  - type: web
+    name: fddt-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      # ── Core ──────────────────────────────────────────────────
+      - key: ENVIRONMENT
+        value: production
+      - key: API_V1_PREFIX
+        value: /api/v1
+
+      # ── Database (Neon) ───────────────────────────────────────
+      - key: DATABASE_URL
+        sync: false          # set in Render dashboard
+      - key: DATABASE_APP_USER
+        value: fddt_app
+      - key: DATABASE_APP_PASSWORD
+        sync: false          # set in Render dashboard
+      - key: DATABASE_PLATFORM_USER
+        value: fddt_platform
+      - key: DATABASE_PLATFORM_PASSWORD
+        sync: false          # set in Render dashboard
+      - key: DB_POOL_SIZE
+        value: "3"
+      - key: DB_MAX_OVERFLOW
+        value: "5"
+
+      # ── Redis (Upstash — rediss:// with TLS) ─────────────────
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+
+      # ── Auth ──────────────────────────────────────────────────
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "480"
+
+      # ── Storage (local disk — ephemeral, ok for demo) ─────────
+      - key: STORAGE_PROVIDER
+        value: local
+      - key: LOCAL_STORAGE_DIR
+        value: /app/local_storage
+      - key: LOCAL_STORAGE_PUBLIC_URL
+        value: /api/files
+
+      # ── OCR (Tesseract, installed in Docker image) ────────────
+      - key: OCR_PROVIDER
+        value: local
+      - key: TESSDATA_DIR
+        value: /usr/share/tesseract-ocr/5/tessdata
+      - key: OCR_LANGUAGES
+        value: eng+hin
+
+      # ── LLM (Google Gemini — free OpenAI-compatible) ──────────
+      - key: LLM_PROVIDER
+        value: openai_compatible
+      - key: LLM_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai/
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: gemini-2.0-flash
+      - key: LLM_REQUEST_TIMEOUT_SECONDS
+        value: "120"
+
+      # ── Azure (leave blank — not used with free providers) ────
+      - key: AZURE_STORAGE_CONNECTION_STRING
+        value: ""
+      - key: AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT
+        value: ""
+      - key: AZURE_DOCUMENT_INTELLIGENCE_KEY
+        value: ""
+      - key: AZURE_AI_VISION_ENDPOINT
+        value: ""
+      - key: AZURE_AI_VISION_KEY
+        value: ""
+      - key: AZURE_OPENAI_KEY
+        value: ""
+      - key: AZURE_OPENAI_ENDPOINT
+        value: ""
+      - key: AZURE_OPENAI_DEPLOYMENT_NAME
+        value: ""
+
+      # ── Uploads ───────────────────────────────────────────────
+      - key: DEFAULT_MAX_FILE_SIZE_MB
+        value: "10"
+      - key: DEFAULT_MAX_ZIP_SIZE_MB
+        value: "50"
+
+      # ── Multi-tenancy ─────────────────────────────────────────
+      - key: DEFAULT_COMPANY_NAME
+        value: Demo Company
+      - key: PLATFORM_ACCESS_AUDIT_DEDUP_SECONDS
+        value: "60"
+
+      # ── Worker rate limits (conservative for free tier) ───────
+      - key: EXTRACTION_WORKER_CONCURRENCY
+        value: "2"
+      - key: VISION_WORKER_CONCURRENCY
+        value: "2"
+      - key: FORENSICS_WORKER_CONCURRENCY
+        value: "1"
+      - key: AZURE_DOCUMENT_INTELLIGENCE_MAX_CALLS_PER_SECOND
+        value: "2"
+
+      # ── Login throttle ────────────────────────────────────────
+      - key: LOGIN_MAX_FAILED_ATTEMPTS
+        value: "5"
+      - key: LOGIN_LOCKOUT_MINUTES
+        value: "15"
+      - key: LOGIN_MAX_ATTEMPTS_PER_IP_PER_MINUTE
+        value: "20"
+
+      # ── Document retention (1 day to save disk on free tier) ──
+      - key: DOCUMENT_RETENTION_DAYS
+        value: "1"
+      - key: DOCUMENT_RETENTION_HOUR_UTC
+        value: "3"
+      - key: DOCUMENT_RETENTION_BATCH_SIZE
+        value: "100"
+
+      # ── Queue health alerts ───────────────────────────────────
+      - key: QUEUE_ALERT_OLDEST_WAITING_SECONDS
+        value: "300"
+
+      # ── Face models (disabled — too large for free tier) ──────
+      - key: FACE_MODEL_DIR
+        value: ""
+
+      # ── Translation (Hindi built-in; others disabled) ─────────
+      - key: GOOGLE_TRANSLATE_API_KEY
+        value: ""
+
+    # The API image runs migrations + seed before serving
+    # Override the Dockerfile CMD here:
+    dockerCommand: sh start-api.sh
+
+  # ─────────────────────────────────────────────────────────────
+  # 2. Celery Worker  (all queues in one process)
+  # ─────────────────────────────────────────────────────────────
+  - type: worker
+    name: fddt-worker
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    dockerCommand: sh start-all-workers.sh
+    envVars:
+      # Same image as the backend — shares all env vars.
+      # Only the command differs (start-all-workers.sh instead of start-api.sh).
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_APP_USER
+        value: fddt_app
+      - key: DATABASE_APP_PASSWORD
+        sync: false
+      - key: DATABASE_PLATFORM_USER
+        value: fddt_platform
+      - key: DATABASE_PLATFORM_PASSWORD
+        sync: false
+      - key: DB_POOL_SIZE
+        value: "2"
+      - key: DB_MAX_OVERFLOW
+        value: "3"
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: STORAGE_PROVIDER
+        value: local
+      - key: LOCAL_STORAGE_DIR
+        value: /app/local_storage
+      - key: LOCAL_STORAGE_PUBLIC_URL
+        value: /api/files
+      - key: OCR_PROVIDER
+        value: local
+      - key: TESSDATA_DIR
+        value: /usr/share/tesseract-ocr/5/tessdata
+      - key: OCR_LANGUAGES
+        value: eng+hin
+      - key: LLM_PROVIDER
+        value: openai_compatible
+      - key: LLM_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai/
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: gemini-2.0-flash
+      - key: LLM_REQUEST_TIMEOUT_SECONDS
+        value: "120"
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: AZURE_STORAGE_CONNECTION_STRING
+        value: ""
+      - key: AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT
+        value: ""
+      - key: AZURE_DOCUMENT_INTELLIGENCE_KEY
+        value: ""
+      - key: AZURE_OPENAI_KEY
+        value: ""
+      - key: AZURE_OPENAI_ENDPOINT
+        value: ""
+      - key: AZURE_OPENAI_DEPLOYMENT_NAME
+        value: ""
+      - key: FACE_MODEL_DIR
+        value: ""
+      - key: EXTRACTION_WORKER_CONCURRENCY
+        value: "2"
+      - key: VISION_WORKER_CONCURRENCY
+        value: "2"
+      - key: FORENSICS_WORKER_CONCURRENCY
+        value: "1"
+
+  # ─────────────────────────────────────────────────────────────
+  # 3. Frontend  (React + Nginx)
+  # ─────────────────────────────────────────────────────────────
+  - type: web
+    name: fddt-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    envVars:
+      # nginx.conf.template substitutes this at container startup.
+      # Replace <your-backend-service-url> with the Render URL of fddt-backend
+      # after first deploy (e.g. https://fddt-backend.onrender.com).
+      - key: API_UPSTREAM
+        value: https://fddt-backend.onrender.com
+      - key: UPLOAD_BODY_LIMIT
+        value: 11m
+      - key: BULK_UPLOAD_BODY_LIMIT
+        value: 51m
