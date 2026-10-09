@@ -363,14 +363,15 @@ def extract_document_fields(file_path: Path, doc_index: int = 1) -> BundleDocume
             logger.info(f"Matched {file_path.name} by SHA-256 hash to test card catalog!")
             return _build_bundle_document(file_path, doc_index, cached)
 
-    # 2. Match by relative or base filename in TEST_CARD_CATALOG
-    fname_lower = file_path.name.lower()
-    for rel_path, data in TEST_CARD_CATALOG.items():
-        if rel_path.lower().endswith(fname_lower) or fname_lower in rel_path.lower():
-            parent_name = file_path.parent.name.lower()
-            if parent_name in rel_path.lower() or "temp" in parent_name:
-                logger.info(f"Matched {file_path.name} by catalog name {rel_path}")
-                return _build_bundle_document(file_path, doc_index, data)
+    # 2. Match by catalog name ONLY if file is explicitly from sample-documents/test-cards
+    if TEST_CARDS_DIR.exists() and "sample-documents" in str(file_path).lower():
+        fname_lower = file_path.name.lower()
+        for rel_path, data in TEST_CARD_CATALOG.items():
+            if rel_path.lower().endswith(fname_lower) or fname_lower in rel_path.lower():
+                parent_name = file_path.parent.name.lower()
+                if parent_name in rel_path.lower():
+                    logger.info(f"Matched {file_path.name} by catalog name {rel_path}")
+                    return _build_bundle_document(file_path, doc_index, data)
 
     # 3. Custom / User Document Extraction
     extracted_data = _extract_via_vision_or_heuristics(file_path, file_bytes, doc_index)
@@ -382,20 +383,26 @@ def _build_bundle_document(file_path: Path, doc_index: int, data: Dict[str, Any]
     doc_type = data.get("document_type") or _infer_document_type(file_path.name)
     identity_fields: Dict[str, Any] = {}
 
+    if data.get("unreadable") or (not data.get("full_name") and not data.get("id_number")):
+        identity_fields["_status"] = {
+            "unreadable": True,
+            "notes": data.get("raw_notes", "Dastavej saaf padha nahi ja saka"),
+        }
+
     if "full_name" in data and data["full_name"]:
         identity_fields["full_name"] = {
-            "value": str(data["full_name"]),
-            "latin": str(data.get("full_name_latin", data["full_name"])),
+            "value": str(data["full_name"]).strip(),
+            "latin": str(data.get("full_name_latin", data["full_name"])).strip(),
             "confidence": 0.95,
         }
     if "parent_or_spouse_name" in data and data["parent_or_spouse_name"]:
         identity_fields["parent_or_spouse_name"] = {
-            "value": str(data["parent_or_spouse_name"]),
-            "latin": str(data.get("parent_or_spouse_name_latin", data["parent_or_spouse_name"])),
+            "value": str(data["parent_or_spouse_name"]).strip(),
+            "latin": str(data.get("parent_or_spouse_name_latin", data["parent_or_spouse_name"])).strip(),
             "confidence": 0.95,
         }
     if "date_of_birth" in data and data["date_of_birth"]:
-        dob_val = str(data["date_of_birth"])
+        dob_val = str(data["date_of_birth"]).strip()
         norm_dob = _normalize_date(dob_val)
         identity_fields["date_of_birth"] = {
             "value": norm_dob,
@@ -417,13 +424,13 @@ def _build_bundle_document(file_path: Path, doc_index: int, data: Dict[str, Any]
         }
     if "address" in data and data["address"]:
         identity_fields["address"] = {
-            "value": str(data["address"]),
-            "latin": str(data["address"]),
+            "value": str(data["address"]).strip(),
+            "latin": str(data["address"]).strip(),
             "confidence": 0.90,
         }
     if "id_number" in data and data["id_number"]:
         identity_fields["id_number"] = {
-            "value": str(data["id_number"]),
+            "value": str(data["id_number"]).strip(),
             "confidence": 0.95,
         }
     if "annual_income" in data and data["annual_income"] is not None:
@@ -447,82 +454,77 @@ def _build_bundle_document(file_path: Path, doc_index: int, data: Dict[str, Any]
 
 
 def _extract_via_vision_or_heuristics(file_path: Path, file_bytes: bytes, doc_index: int) -> Dict[str, Any]:
-    """Extracts identity attributes using AI Vision or regex heuristics."""
-    from config import MOCK_MODE
+    """Extracts genuine identity attributes using Google Gemini Vision API without fake mock fallbacks."""
     gemini_key = os.getenv("VISION_LLM_API_KEY") or os.getenv("LLM_API_KEY")
 
-    if gemini_key and file_bytes and not MOCK_MODE:
+    if gemini_key and file_bytes:
         try:
             import httpx
-            b64_img = base64.b64encode(file_bytes).decode("utf-8")
-            ext = file_path.suffix.lower()
-            mime = "image/png" if ext == ".png" else "image/jpeg"
+            import io
+            from PIL import Image
+
+            # Downscale image to max 1200x1200 and re-encode to JPEG
+            # This makes upload blazing fast (under 100KB) and avoids network timeouts
+            im = Image.open(io.BytesIO(file_bytes))
+            im.thumbnail((1200, 1200))
+            if im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+            buf = io.BytesIO()
+            im.save(buf, format="JPEG", quality=85)
+            b64_img = base64.b64encode(buf.getvalue()).decode("utf-8")
 
             prompt = (
-                "Extract identity details from this Indian ID/certificate image into a raw JSON object with keys: "
-                "document_type (national_id_card, tax_id_card, income_certificate, voter_id_card, address_proof), "
-                "full_name, parent_or_spouse_name, date_of_birth (YYYY-MM-DD), gender (male/female), id_number, address, annual_income. "
-                "Output only JSON."
+                "You are an expert Indian official document verification system. "
+                "Analyze this uploaded image (Aadhaar, PAN card, Voter ID, Income Certificate, or other government certificate). "
+                "Extract the genuine details from the image text into a raw JSON object with these exact keys:\n"
+                "- document_type: one of 'national_id_card' (Aadhaar), 'tax_id_card' (PAN), 'income_certificate', 'voter_id_card', 'address_proof', 'other'\n"
+                "- full_name: string or null\n"
+                "- parent_or_spouse_name: string or null\n"
+                "- date_of_birth: 'YYYY-MM-DD' or null\n"
+                "- gender: 'male', 'female', 'other', or null\n"
+                "- id_number: string or null (e.g. Aadhaar number, PAN number, Certificate number)\n"
+                "- address: string or null\n"
+                "- annual_income: float or null\n"
+                "CRITICAL: If any field is not printed or unreadable on the card, set it to null. "
+                "Do NOT invent or guess any fake details. Output ONLY raw JSON."
             )
-            resp = httpx.post(
-                "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-                headers={"Authorization": f"Bearer {gemini_key}"},
-                json={
-                    "model": "gemini-3.8-flash",
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64_img}"}},
-                            ],
-                        }
-                    ],
-                    "max_tokens": 400,
-                    "temperature": 0.1,
-                },
-                timeout=12.0,
-            )
+
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={gemini_key}"
+            payload = {
+                "contents": [{
+                    "parts": [
+                        {"text": prompt},
+                        {"inline_data": {"mime_type": "image/jpeg", "data": b64_img}}
+                    ]
+                }],
+                "generationConfig": {"response_mime_type": "application/json"}
+            }
+
+            resp = httpx.post(url, json=payload, timeout=25.0)
             if resp.status_code == 200:
                 body = resp.json()
-                content = body.get("choices", [{}])[0].get("message", {}).get("content", "")
-                content_clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip())
+                raw_text = body.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                content_clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text.strip())
                 parsed = json.loads(content_clean)
                 if isinstance(parsed, dict) and (parsed.get("full_name") or parsed.get("id_number")):
+                    logger.info(f"Vision API extracted real data for {file_path.name}: {parsed.get('full_name')}")
                     return parsed
         except Exception as e:
-            logger.debug(f"Vision API extraction skipped/failed: {e}")
+            logger.warning(f"Vision API extraction failed for {file_path.name}: {e}")
 
-    # Fallback heuristic based on filename & doc index
-    fname = file_path.name.lower()
-    if "pan" in fname or "tax" in fname:
-        return {
-            "document_type": "tax_id_card",
-            "full_name": "Rahul Sharma",
-            "parent_or_spouse_name": "Mohan Sharma",
-            "date_of_birth": "1990-08-15",
-            "gender": "male",
-            "id_number": "ABCPR4821K",
-        }
-    elif "income" in fname:
-        return {
-            "document_type": "income_certificate",
-            "full_name": "Rahul Sharma",
-            "parent_or_spouse_name": "Mohan Sharma",
-            "annual_income": 80000.0,
-            "id_number": "IC/2026/08819",
-            "address": ADDR_DEFAULT,
-        }
-    else:
-        return {
-            "document_type": "national_id_card",
-            "full_name": "Rahul Sharma",
-            "parent_or_spouse_name": "Mohan Sharma",
-            "date_of_birth": "1990-08-15",
-            "gender": "male",
-            "id_number": "9101 2233 4455",
-            "address": ADDR_DEFAULT,
-        }
+    # ABSOLUTELY ZERO MOCK DATA: Never return fake "Rahul Sharma". Return honest unreadable indicator.
+    return {
+        "document_type": _infer_document_type(file_path.name),
+        "full_name": None,
+        "parent_or_spouse_name": None,
+        "date_of_birth": None,
+        "gender": None,
+        "id_number": None,
+        "address": None,
+        "annual_income": None,
+        "unreadable": True,
+        "raw_notes": "Dastavej ka text saaf padha nahi ja saka",
+    }
 
 
 def _infer_document_type(filename: str) -> str:
@@ -561,15 +563,25 @@ def get_document_preview_summary(bundle_doc: BundleDocument, index: int = 1) -> 
     type_label = DOCUMENT_LABELS.get(bundle_doc.document_type, bundle_doc.document_type.replace("_", " ").title())
     fields = bundle_doc.identity_fields or {}
 
-    name = fields.get("full_name", {}).get("value") or "Not found"
+    is_unreadable = fields.get("_status", {}).get("unreadable") or (
+        not fields.get("full_name", {}).get("value") and not fields.get("id_number", {}).get("value")
+    )
+    if is_unreadable:
+        return (
+            f"📄 *Dastavej {index}: {type_label}*\n"
+            f"   ⚠️ *Status:* Dastavej ka text saaf padha nahi ja saka\n"
+            f"   _Kripya photo achhi lighting me aur bina dhundhla kiye dobara bhejiye._"
+        )
+
+    name = fields.get("full_name", {}).get("value") or "-"
     dob = fields.get("date_of_birth", {}).get("raw_text") or fields.get("date_of_birth", {}).get("value") or "-"
     num = fields.get("id_number", {}).get("value") or "-"
     gender = fields.get("gender", {}).get("raw_text") or fields.get("gender", {}).get("value") or ""
     parent = fields.get("parent_or_spouse_name", {}).get("value") or ""
 
     lines = [
-        f"📄 *Document {index}: {type_label}*",
-        f"   👤 *Name:* `{name}`",
+        f"📄 *Dastavej {index}: {type_label}*",
+        f"   👤 *Naam:* `{name}`",
     ]
     if dob != "-":
         lines.append(f"   📅 *Date of Birth (DOB):* `{dob}`")
@@ -586,7 +598,7 @@ def get_document_preview_summary(bundle_doc: BundleDocument, index: int = 1) -> 
 async def verify_documents(doc_paths: List[Path]) -> Dict[str, Any]:
     """
     Runs cross-document contradiction check using backend identity_comparison service
-    over the genuinely extracted BundleDocument list.
+    over the genuinely extracted BundleDocument list. Strictly ZERO mock data.
     """
     if BACKEND_AVAILABLE:
         try:
@@ -594,8 +606,16 @@ async def verify_documents(doc_paths: List[Path]) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Error running backend comparison: {e}", exc_info=True)
 
-    # Fallback
-    return get_smart_bundle_mock_result(len(doc_paths))
+    # Genuine honest failure report (never invent fake people or conflicts)
+    return {
+        "status": "VERIFICATION_ERROR",
+        "total_documents_scanned": len(doc_paths),
+        "scanned_documents": [p.name for p in doc_paths],
+        "matches": [],
+        "harmless_variants": [],
+        "conflicts": [],
+        "error_message": "Dastavejon ki jaanch me takneeki samasya aayi. Kripya thodi der baad dobara koshish karein.",
+    }
 
 
 def run_backend_comparison(doc_paths: List[Path]) -> Dict[str, Any]:
@@ -768,36 +788,3 @@ def verify_bundle_by_id(bundle_id: str) -> Dict[str, Any] | None:
     except Exception as e:
         logger.error(f"Error testing bundle {bundle_id}: {e}", exc_info=True)
         return None
-
-
-def get_smart_bundle_mock_result(total_docs: int) -> Dict[str, Any]:
-    """Smart fallback result when backend services are offline."""
-    return {
-        "status": "CONTRADICTION_FOUND",
-        "total_documents_scanned": total_docs,
-        "scanned_documents": [f"Document {i+1}" for i in range(total_docs)],
-        "matches": ["Applicant Name: Match", "Gender: Match"],
-        "harmless_variants": [
-            {
-                "field": "Address Format",
-                "doc1_name": "Aadhaar Card",
-                "doc1_value": "Flat 201, Shanti Apts, MG Road",
-                "doc2_name": "Electricity Bill",
-                "doc2_value": "#201 Shanti Apartments, M.G. Marg",
-                "reason": "Address abbreviation / format difference",
-                "message": "Format difference only. Same location."
-            }
-        ],
-        "conflicts": [
-            {
-                "field": "Date of Birth",
-                "doc1_name": "Aadhaar Card",
-                "doc1_value": "14/08/1990",
-                "doc2_name": "Income Certificate",
-                "doc2_value": "14/08/1998",
-                "severity": "HIGH",
-                "reason": "date_year_difference",
-                "message": "Birth year mismatch by 8 years."
-            }
-        ]
-    }

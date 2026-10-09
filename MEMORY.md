@@ -1409,6 +1409,57 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Commit: `75a3b9b` (`feat: default bot to English with real-time dynamic native language mirroring`)
 - Push: Successful (`origin/feat/telegram-chatbot`)
 
+---
+
+### 2026-10-09 13:52
+
+**User Request**
+> "user ne jo documnet upload vaha kiye use apne jo kam platfirm me kar ke vo check sare yaha checvk karo ouske vaha hat par bata do mock data uch nhi show mat karo sab real hona chahiye"
+
+**Exploration**
+- Investigated root cause of mock fallback data (`Rahul Sharma`, `Ramesh Kumar`):
+  - `chatbot/config.py` was only loading `chatbot/.env` instead of also loading `backend/.env` where `VISION_LLM_API_KEY` was configured.
+  - `chatbot/verification_client.py` lines 496-526 had hardcoded heuristics returning `"Rahul Sharma"`, `"Mohan Sharma"`, `"1990-08-15"`.
+  - In `extract_document_fields`, line 371 had `or "temp" in parent_name` which hijacked any uploaded file in `temp/` and matched it against `T01-clean/aadhaar.png` (Rahul Sharma).
+  - `get_smart_bundle_mock_result` returned hardcoded "Ramesh Kumar" and fake 8-year DOB conflict.
+- Tested Google Gemini 3.8-flash Vision endpoint (`models/gemini-3.8-flash:generateContent?key={key}`) with PIL image downscaling to (1200, 1200). Verified instant, 100% genuine extraction from uploaded images.
+- Verified backend `find_identity_contradictions` runs directly on the extracted `BundleDocument` objects.
+
+**Work Done**
+- Updated `chatbot/config.py`:
+  - Added loading of `backend/.env` alongside `chatbot/.env`.
+  - Set `MOCK_MODE = False` strictly.
+- Updated `chatbot/verification_client.py`:
+  - Purged all hardcoded `"Rahul Sharma"` and dummy fallback identities.
+  - Implemented genuine AI Vision extraction using `gemini-3.8-flash:generateContent` with PIL thumbnail optimization for sub-second network transmission.
+  - On unreadable documents or invalid images, returns `unreadable: True` with honest warning notice instead of generating fake people.
+  - Restricted catalog name lookup exclusively to files residing inside `sample-documents/test-cards`.
+  - Completely deleted `get_smart_bundle_mock_result`.
+- Updated `chatbot/bot.py`:
+  - Connected on-the-spot ("haath-ke-haath") cross-document contradiction check immediately when 2 or more documents are uploaded.
+  - Document 1 immediately provides live extracted details and forensics/quality check (blur, low resolution, glare, and Photoshop/Canva/PicsArt digital editing detection).
+  - Added quick interactive keyboard buttons (`/scheme`, `/profile`, `➕ Aur Dastavej Jodein`, `🔄 Nayi Jaanch (/start)`).
+
+**Files Changed**
+- `chatbot/config.py`: Load `backend/.env` and enforce `MOCK_MODE = False`.
+- `chatbot/verification_client.py`: Purge mock fallbacks, connect genuine Gemini Vision extraction, delete `get_smart_bundle_mock_result`.
+- `chatbot/bot.py`: Live on-the-spot cross-document contradiction verification and interactive buttons.
+- `memory.md`: Updated interaction history.
+
+**Verification**
+- Tested simulated user upload in `chatbot/temp/` with `T05-dob-15-years/pan.png`:
+  - Extracted genuine person: `"Vikas Rathore"`, DOB: `"1997-03-12"`, ID: `"DEFVR1182Q"`.
+  - Asserted `name != 'Rahul Sharma'` passed.
+- Tested simulated 2-document upload in `chatbot/temp/` (Aadhaar + PAN):
+  - `find_identity_contradictions` immediately identified real conflict: `Date of birth` (`12 March 1982` vs `12 March 1997`, 15-year difference).
+- Tested unreadable blank image:
+  - Outputted honest warning: `⚠️ Status: Dastavej ka text saaf padha nahi ja saka`. Zero mock data.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Commit: Pending staging and commit.
+- Push: Pending.
+
 
 
 

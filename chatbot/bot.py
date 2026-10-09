@@ -207,28 +207,27 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
         return
 
     if count >= 2:
-        keyboard = [[VERIFY_BUTTON_TEXT]]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-        msg = (
-            f"✅ *Received & Scanned {count} Documents!*\n\n"
+        await update.message.reply_text(
+            f"✅ *Scan Safal ({count} Dastavej Prapt)!*\n\n"
             f"{docs_preview_text}"
             f"{quality_banner}\n\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
-            f"📊 Bundle: *{count}/{MAX_DOCS} documents*\n\n"
-            "👉 You can send more documents,\n"
-            f"OR click *'{VERIFY_BUTTON_TEXT}'* below to run cross-document check!"
+            "⚡ *Haath-ke-haath Cross-Document Verification shuru ho rahi hai...*",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=ReplyKeyboardRemove(),
         )
+        await _trigger_verification(update, context)
+        return
     else:
         reply_markup = ReplyKeyboardRemove()
         msg = (
-            f"✅ *First Document Received & Scanned!*\n\n"
+            f"✅ *Pehla Dastavej Scan Ho Gaya!*\n\n"
             f"{docs_preview_text}"
             f"{quality_banner}\n\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
-            "📄 Please send the 2nd document (e.g. PAN Card or Income Certificate) to cross-verify."
+            "📄 *Agla Kadam:* Kripya dusra dastavej (jaise PAN Card ya Aay Praman Patra) bhejiye taaki dono ke beech milan aur jaanch ho sake."
         )
-
-    await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
 
 async def handle_verify_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Triggered when citizen clicks verify button or types /done."""
@@ -244,13 +243,13 @@ async def handle_verify_request(update: Update, context: ContextTypes.DEFAULT_TY
     return ConversationHandler.END
 
 async def _trigger_verification(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Executes backend bundle verification and sends report."""
+    """Executes backend bundle verification and sends report on the spot."""
     doc_paths = context.user_data.get("doc_paths", [])
     total = len(doc_paths)
 
     processing_msg = await update.message.reply_text(
-        f"⏳ *Kul {total} dastavejon ka bundle mil gaya!*\n"
-        "_Backend Cross-Document Engine sabhi documents ko aapas me mila raha hai... Kripya 2-3 second pratiksha karein..._",
+        f"⏳ *Kul {total} dastavejon ka milan ho raha hai...*\n"
+        "_Backend Cross-Document Engine sabhi dastavejon ko check kar raha hai..._",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=ReplyKeyboardRemove(),
     )
@@ -262,8 +261,14 @@ async def _trigger_verification(update: Update, context: ContextTypes.DEFAULT_TY
         # Cache for /scheme and /profile
         context.user_data["last_result"] = result_data
 
+        keyboard = [
+            ["📜 /scheme (Yojana Jaanch)", "👤 /profile (Digital Profile)"],
+            ["➕ Aur Dastavej Jodein", "🔄 Nayi Jaanch (/start)"]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
         await processing_msg.delete()
-        await update.message.reply_text(report_text, parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text(report_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"Error during bundle verification: {e}", exc_info=True)
         await processing_msg.edit_text(
@@ -371,9 +376,22 @@ async def handle_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not text or text.strip().startswith("/"):
         return
 
-    # Check if verify button was clicked
-    if text.strip() == VERIFY_BUTTON_TEXT:
+    # Check if action buttons were clicked
+    clean_text = text.strip().lower()
+    if text.strip() == VERIFY_BUTTON_TEXT or "jaanch karein" in clean_text:
         await handle_verify_request(update, context)
+        return
+    if "aur dastavej" in clean_text:
+        await update.message.reply_text("📄 Kripya agle document ki photo ya file bhejiye.")
+        return
+    if "nayi jaanch" in clean_text:
+        await start_command(update, context)
+        return
+    if "yojana jaanch" in clean_text:
+        await scheme_command(update, context)
+        return
+    if "digital profile" in clean_text:
+        await profile_command(update, context)
         return
 
     # Send typing feedback
