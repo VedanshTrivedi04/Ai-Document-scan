@@ -453,8 +453,27 @@ def _build_bundle_document(file_path: Path, doc_index: int, data: Dict[str, Any]
     )
 
 
+def _normalize_extracted_doc_type(dtype_raw: str | None, fallback_filename: str) -> str:
+    raw = (dtype_raw or "").lower()
+    if any(k in raw for k in ("pan", "tax", "permanent account")):
+        return "tax_id_card"
+    if any(k in raw for k in ("aadhaar", "national", "uidai", "aadhar")):
+        return "national_id_card"
+    if any(k in raw for k in ("income", "aay")):
+        return "income_certificate"
+    if any(k in raw for k in ("voter", "epic", "election")):
+        return "voter_id_card"
+    if any(k in raw for k in ("address", "bill", "electricity", "water", "gas")):
+        return "address_proof"
+    if "ration" in raw:
+        return "ration_card"
+    if any(k in raw for k in ("marksheet", "school", "board", "degree", "certificate", "matric")):
+        return "marksheet"
+    return _infer_document_type(fallback_filename)
+
+
 def _extract_via_vision_or_heuristics(file_path: Path, file_bytes: bytes, doc_index: int) -> Dict[str, Any]:
-    """Extracts genuine identity attributes using Google Gemini Vision API without fake mock fallbacks."""
+    """Extracts genuine identity attributes using Google Gemini Vision API with multi-model fallback."""
     gemini_key = os.getenv("VISION_LLM_API_KEY") or os.getenv("LLM_API_KEY")
 
     if gemini_key and file_bytes:
@@ -463,21 +482,25 @@ def _extract_via_vision_or_heuristics(file_path: Path, file_bytes: bytes, doc_in
             import io
             from PIL import Image
 
-            # Downscale image to max 1200x1200 and re-encode to JPEG
-            # This makes upload blazing fast (under 100KB) and avoids network timeouts
-            im = Image.open(io.BytesIO(file_bytes))
-            im.thumbnail((1200, 1200))
-            if im.mode not in ("RGB", "L"):
-                im = im.convert("RGB")
-            buf = io.BytesIO()
-            im.save(buf, format="JPEG", quality=85)
-            b64_img = base64.b64encode(buf.getvalue()).decode("utf-8")
+            is_pdf = file_path.suffix.lower() == ".pdf"
+            if is_pdf:
+                mime_type = "application/pdf"
+                b64_data = base64.b64encode(file_bytes).decode("utf-8")
+            else:
+                mime_type = "image/jpeg"
+                im = Image.open(io.BytesIO(file_bytes))
+                im.thumbnail((1200, 1200))
+                if im.mode not in ("RGB", "L"):
+                    im = im.convert("RGB")
+                buf = io.BytesIO()
+                im.save(buf, format="JPEG", quality=85)
+                b64_data = base64.b64encode(buf.getvalue()).decode("utf-8")
 
             prompt = (
                 "You are an expert Indian official document verification system. "
-                "Analyze this uploaded image (Aadhaar, PAN card, Voter ID, Income Certificate, or other government certificate). "
-                "Extract the genuine details from the image text into a raw JSON object with these exact keys:\n"
-                "- document_type: one of 'national_id_card' (Aadhaar), 'tax_id_card' (PAN), 'income_certificate', 'voter_id_card', 'address_proof', 'other'\n"
+                "Analyze this uploaded document (Aadhaar, PAN card, Voter ID, Income Certificate, Marksheet, or other government certificate). "
+                "Extract the genuine details from the document text into a raw JSON object with these exact keys:\n"
+                "- document_type: one of 'national_id_card' (Aadhaar), 'tax_id_card' (PAN), 'income_certificate', 'voter_id_card', 'address_proof', 'marksheet', 'other'\n"
                 "- full_name: string or null\n"
                 "- parent_or_spouse_name: string or null\n"
                 "- date_of_birth: 'YYYY-MM-DD' or null\n"
@@ -489,28 +512,41 @@ def _extract_via_vision_or_heuristics(file_path: Path, file_bytes: bytes, doc_in
                 "Do NOT invent or guess any fake details. Output ONLY raw JSON."
             )
 
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={gemini_key}"
-            payload = {
-                "contents": [{
-                    "parts": [
-                        {"text": prompt},
-                        {"inline_data": {"mime_type": "image/jpeg", "data": b64_img}}
-                    ]
-                }],
-                "generationConfig": {"response_mime_type": "application/json"}
-            }
+            # Resilient model cascade: automatically falls back if quota (429) or busy (503) occurs
+            candidate_models = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.7-flash", "gemini-3.8-flash"]
+            for model_name in candidate_models:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
+                payload = {
+                    "contents": [{
+                        "parts": [
+                            {"text": prompt},
+                            {"inline_data": {"mime_type": mime_type, "data": b64_data}}
+                        ]
+                    }],
+                    "generationConfig": {"response_mime_type": "application/json"}
+                }
 
-            resp = httpx.post(url, json=payload, timeout=25.0)
-            if resp.status_code == 200:
-                body = resp.json()
-                raw_text = body.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                content_clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text.strip())
-                parsed = json.loads(content_clean)
-                if isinstance(parsed, dict) and (parsed.get("full_name") or parsed.get("id_number")):
-                    logger.info(f"Vision API extracted real data for {file_path.name}: {parsed.get('full_name')}")
-                    return parsed
+                try:
+                    resp = httpx.post(url, json=payload, timeout=25.0)
+                    if resp.status_code == 200:
+                        body = resp.json()
+                        raw_text = body.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                        content_clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text.strip())
+                        parsed = json.loads(content_clean)
+                        if isinstance(parsed, dict) and (parsed.get("full_name") or parsed.get("id_number")):
+                            parsed["document_type"] = _normalize_extracted_doc_type(parsed.get("document_type"), file_path.name)
+                            logger.info(f"Vision API ({model_name}) extracted real data for {file_path.name}: {parsed.get('full_name')} ({parsed.get('document_type')})")
+                            return parsed
+                    elif resp.status_code in (429, 503):
+                        logger.warning(f"Vision model {model_name} rate limit / busy ({resp.status_code}), cascading to next model...")
+                        continue
+                    else:
+                        logger.warning(f"Vision model {model_name} error {resp.status_code}: {resp.text[:150]}")
+                except Exception as model_err:
+                    logger.warning(f"Vision model {model_name} call failed: {model_err}")
+                    continue
         except Exception as e:
-            logger.warning(f"Vision API extraction failed for {file_path.name}: {e}")
+            logger.warning(f"Vision API extraction pipeline failed for {file_path.name}: {e}")
 
     # ABSOLUTELY ZERO MOCK DATA: Never return fake "Rahul Sharma". Return honest unreadable indicator.
     return {
@@ -568,7 +604,18 @@ def get_document_preview_summary(bundle_doc: BundleDocument, index: int = 1) -> 
     Returns a clean, friendly Hindi preview string of the extracted fields for
     immediate feedback in the Telegram chat intake flow.
     """
-    type_label = DOCUMENT_LABELS.get(bundle_doc.document_type, bundle_doc.document_type.replace("_", " ").title())
+    friendly_names = {
+        "national_id_card": "Aadhaar Card",
+        "tax_id_card": "PAN Card",
+        "income_certificate": "Income Certificate (Aay Praman Patra)",
+        "voter_id_card": "Voter ID Card",
+        "address_proof": "Address Proof",
+        "marksheet": "Marksheet / Certificate",
+        "ration_card": "Ration Card",
+        "driving_license": "Driving License",
+        "passport": "Passport",
+    }
+    type_label = friendly_names.get(bundle_doc.document_type) or DOCUMENT_LABELS.get(bundle_doc.document_type, bundle_doc.document_type.replace("_", " ").title())
     fields = bundle_doc.identity_fields or {}
 
     is_unreadable = fields.get("_status", {}).get("unreadable") or (
