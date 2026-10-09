@@ -1372,7 +1372,8 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Status: Staged and committed.
+- Commit: `a73986f` (`feat: integrate grounded Groq conversational assistant for natural citizen queries`)
+- Push: Successful (`origin/feat/telegram-chatbot`)
 
 
 
