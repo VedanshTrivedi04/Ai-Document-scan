@@ -2009,7 +2009,9 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Status: Staged and committed.
+- Commit: `9b30f1b` (`feat: localize chatbot buttons, previews, and reports to English`)
+- Push: Successful (`origin/feat/telegram-chatbot`)
+- Status: Complete
 
 
 
