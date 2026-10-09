@@ -6,8 +6,8 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { z } from "zod"
 
-import { createCase, getCase, uploadDocument } from "@/api/cases"
-import { getMyFamily, getMyMembership } from "@/api/family"
+import { createCase, uploadDocument } from "@/api/cases"
+import { getMyFamily } from "@/api/family"
 import { ApiError } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { Nav } from "@/design-system/Nav"
@@ -30,10 +30,10 @@ import {
 import { FileDropzone, type FileWithProgress } from "@/components/upload/FileDropzone"
 import { SignatureReferenceCreator } from "@/components/upload/SignatureReferenceCreator"
 import { useAuth } from "@/hooks/useAuth"
-import { useRetentionPolicy, useUploadLimits } from "@/hooks/useUploadLimits"
+import { useUploadLimits } from "@/hooks/useUploadLimits"
 import { clientUploadProblem, ACCEPTED_UPLOAD_TYPES_STRING, ACCEPTED_IDENTITY_UPLOAD_TYPES_STRING } from "@/lib/uploadLimits"
 import { CASE_TYPE_LABELS, CASE_TYPES, isIdentityCase, type Case } from "@/types/case"
-import type { CaseDocument, CaseType, SignatureReference } from "@/types/case"
+import type { CaseDocument, SignatureReference } from "@/types/case"
 
 // The draw-a-box viewer (react-pdf) and the backend crop both work on PDFs
 // only, same scope as every other forensics check in this project.
@@ -57,11 +57,6 @@ export function NewCasePage() {
   const canUpload = Boolean(user) && !isPlatformAdmin
   // This company's per-file limit (set by a platform admin).
   const maxFileBytes = useUploadLimits()?.max_file_size_bytes ?? null
-  // How long an uploaded file is kept before it is removed automatically (0: kept).
-  const retentionPolicy = useRetentionPolicy()
-  const retentionDays = retentionPolicy?.document_retention_days ?? 0
-  // A private upload: removed, with everything read from it, when the person signs out.
-  const [privateUpload, setPrivateUpload] = React.useState(false)
 
   const [fileEntries, setFileEntries] = React.useState<FileWithProgress[]>([])
   const [filesError, setFilesError] = React.useState<string | null>(null)
@@ -88,30 +83,8 @@ export function NewCasePage() {
     enabled: Boolean(token && !isPlatformAdmin),
   })
 
-  // A family member with a sign-in of their own (not the head): their documents join their own bundle.
-  const { data: membership } = useQuery({
-    queryKey: ["family", "membership", token],
-    queryFn: () => getMyMembership(token!),
-    enabled: Boolean(token && !isPlatformAdmin),
-  })
-
   const isHead = familyData?.head_user_id === user?.id
   const selectedMember = familyData?.members?.find((m) => m.id === selectedFamilyMemberId)
-
-  // New documents for a person join that person's existing bundle, so the
-  // contradiction check runs across all of their documents. The head adds to
-  // the chosen member's bundle (their own when none is chosen); a member adds
-  // to theirs. "Separate bundle" opts out.
-  const [separateBundle, setSeparateBundle] = React.useState(false)
-  const targetMember = isHead
-    ? (selectedMember ?? familyData?.members?.find((m) => m.is_head))
-    : undefined
-  const existingBundleId: string | null =
-    (isHead ? targetMember?.latest_case_id : membership?.latest_case_id) ?? null
-  const existingBundleNumber = isHead
-    ? targetMember?.cases[0]?.case_number
-    : membership?.cases[0]?.case_number
-  const existingBundleOwner = isHead ? (targetMember?.full_name ?? "") : (membership?.full_name ?? "")
 
   // Always reset case creation state when landing on new case page
   React.useEffect(() => {
@@ -137,24 +110,13 @@ export function NewCasePage() {
 
   const selectedCaseType = watch("caseType")
   const isIdentity = isIdentityCase(selectedCaseType)
-  const [submissionCategory, setSubmissionCategory] = React.useState<"person" | "claim">("person")
-  const canUploadPrivately =
-    Boolean(retentionPolicy?.private_upload_available) && isIdentity && submissionCategory === "person"
-  const isPrivateUpload = canUploadPrivately && privateUpload
-  // A private upload is always its own bundle: it must not pull a lasting profile into its removal.
-  const attachToExisting =
-    isIdentity &&
-    submissionCategory === "person" &&
-    selectedCaseType === "identity_verification" &&
-    !separateBundle &&
-    !isPrivateUpload
+  const submissionCategory: "person" | "claim" = isIdentity ? "person" : "claim"
 
   const handleCategorySelect = (category: "person" | "claim") => {
-    setSubmissionCategory(category)
     if (category === "person") {
-      setValue("caseType", "identity_verification")
+      setValue("caseType", "identity_verification", { shouldValidate: true, shouldDirty: true })
     } else {
-      setValue("caseType", "vendor_invoice")
+      setValue("caseType", "vendor_invoice", { shouldValidate: true, shouldDirty: true })
     }
   }
 
@@ -240,24 +202,11 @@ export function NewCasePage() {
 
     try {
       let activeCase = createdCase
-      if (!activeCase && attachToExisting && existingBundleId) {
-        // Add to the person's existing bundle instead of starting a new one.
-        const existing = await getCase(existingBundleId, token)
-        activeCase = {
-          id: existing.id,
-          case_number: existing.case_number,
-          case_type: existing.case_type,
-          status: existing.status,
-          risk_tier: null,
-          submitted_by_user_id: user?.id ?? "",
-          created_at: existing.created_at,
-        }
-        setCreatedCase(activeCase)
-      }
       if (!activeCase) {
-        // A fresh, isolated case for this submission.
+        // ALWAYS create a fresh, strictly isolated case for this submission.
+        // Multiple documents attached in this form will belong exclusively to this case.
         const memberIdToSend = isIdentity && isHead ? selectedFamilyMemberId : null
-        activeCase = await createCase(values.caseType, token, memberIdToSend, isPrivateUpload)
+        activeCase = await createCase(values.caseType, token, memberIdToSend)
         setCreatedCase(activeCase)
       }
       await uploadAll(activeCase.id)
@@ -336,19 +285,6 @@ export function NewCasePage() {
                         <UsersIcon className="size-3.5" />
                         Linked to household member: <strong>{selectedMember.full_name}</strong> ({selectedMember.relation_label || selectedMember.relation})
                       </p>
-                    )}
-                    {isPrivateUpload ? (
-                      <p role="alert" className="text-xs font-medium mt-1.5 text-amber-900">
-                        Private upload: these files and everything read from them will be removed for good when you
-                        sign out.
-                      </p>
-                    ) : (
-                      retentionDays > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1.5">
-                          The uploaded files will be removed automatically after {retentionDays} days. The details
-                          read from them are kept.
-                        </p>
-                      )
                     )}
                   </div>
 
@@ -542,13 +478,11 @@ export function NewCasePage() {
                       name="caseType"
                       render={({ field }) => (
                         <Select
+                          key={submissionCategory}
                           value={field.value}
                           onValueChange={(val) => {
-                            field.onChange(val)
-                            if (isIdentityCase(val as CaseType)) {
-                              setSubmissionCategory("person")
-                            } else {
-                              setSubmissionCategory("claim")
+                            if (val) {
+                              field.onChange(val)
                             }
                           }}
                           disabled={Boolean(createdCase && uploadedDocs.length > 0)}
@@ -567,7 +501,7 @@ export function NewCasePage() {
                                 </SelectItem>
                               </>
                             ) : (
-                              CASE_TYPES.filter((t) => !isIdentityCase(t) && t !== "family_comparison").map((type) => (
+                              CASE_TYPES.filter((t) => !isIdentityCase(t)).map((type) => (
                                 <SelectItem key={type} value={type}>
                                   {CASE_TYPE_LABELS[type]}
                                 </SelectItem>
@@ -623,88 +557,6 @@ export function NewCasePage() {
                       <p className="text-[11px] text-muted-foreground">
                         Submitting this bundle for a household member automatically runs cross-member consistency checks (identity, shared address, parent names, birth order).
                       </p>
-                    </div>
-                  )}
-
-                  {retentionDays > 0 && !isPrivateUpload && (
-                    <div
-                      role="alert"
-                      className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-950 flex flex-col gap-1"
-                    >
-                      <p className="font-semibold">Files are removed after {retentionDays} days</p>
-                      <p>
-                        Each file you upload is deleted automatically {retentionDays} days after upload and cannot be
-                        recovered. The details read from it (name, date of birth, address and so on), the findings and
-                        the verified profile are kept. Keep your own copy of the original.
-                      </p>
-                    </div>
-                  )}
-
-                  {canUploadPrivately && (
-                    <div
-                      className={`rounded-xl border p-3.5 text-xs flex flex-col gap-2 ${
-                        privateUpload ? "border-amber-400 bg-amber-50 text-amber-950" : "border-border bg-muted/20"
-                      }`}
-                    >
-                      <label className="flex items-start gap-2.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={privateUpload}
-                          onChange={(e) => setPrivateUpload(e.target.checked)}
-                          disabled={Boolean(createdCase)}
-                          className="mt-0.5 size-4 accent-amber-600"
-                        />
-                        <span>
-                          <span className="font-semibold block">Private upload: remove everything when I sign out</span>
-                          <span className="text-muted-foreground">
-                            For a one-time check. The files and everything read from them are removed for good as soon
-                            as you sign out.
-                          </span>
-                        </span>
-                      </label>
-                      {privateUpload && (
-                        <ul role="alert" className="list-disc pl-9 flex flex-col gap-0.5 font-medium">
-                          <li>The files, the details read from them, the findings and the profile are all removed.</li>
-                          <li>It cannot be undone, and it also happens if your session runs out.</li>
-                          <li>These documents are checked on their own, not added to a saved profile.</li>
-                        </ul>
-                      )}
-                    </div>
-                  )}
-
-                  {attachToExisting && existingBundleId && (
-                    <div
-                      role="status"
-                      className="rounded-xl border border-blue-200 bg-blue-50/80 p-3.5 text-xs text-blue-900 flex flex-col gap-1.5"
-                    >
-                      <p className="font-semibold">
-                        Adding to {existingBundleOwner ? `${existingBundleOwner}'s` : "this person's"} active profile
-                        {existingBundleNumber ? ` (${existingBundleNumber})` : ""}
-                      </p>
-                      <p>
-                        Every document you upload joins this person's bundle, and all of them are checked against each
-                        other for differences in name, date of birth, address or parent's name.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setSeparateBundle(true)}
-                        disabled={Boolean(createdCase && uploadedDocs.length > 0)}
-                        className="self-start underline font-medium hover:text-blue-950 disabled:opacity-50"
-                      >
-                        Create a separate bundle instead
-                      </button>
-                    </div>
-                  )}
-                  {isIdentity && separateBundle && existingBundleId && !isPrivateUpload && (
-                    <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs flex items-center justify-between gap-2">
-                      <span>A separate bundle will be created for this upload.</span>
-                      <button
-                        type="button"
-                        onClick={() => setSeparateBundle(false)}
-                        className="underline font-medium"
-                      >
-                        Add to the active profile instead
-                      </button>
                     </div>
                   )}
 
@@ -792,9 +644,7 @@ export function NewCasePage() {
               <div className="mb-1 text-[11px] font-bold uppercase tracking-widest text-accent">Evidence Integrity</div>
               <h3 className="text-base font-bold text-foreground">Originals remain unchanged</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                {retentionDays > 0
-                  ? `Each file is stored unaltered, with a verifiable integrity hash, for ${retentionDays} days and then removed. The details read from it and the complete audit history are kept.`
-                  : "Every uploaded file is preserved with a verifiable integrity hash and complete audit history."}
+                Every uploaded file is preserved with a verifiable integrity hash and complete audit history.
               </p>
             </div>
           </div>

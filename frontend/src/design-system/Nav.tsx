@@ -129,7 +129,7 @@ export function Nav({ active, onNewUploadClick }: NavProps) {
         <div className="flex items-center gap-3 sm:gap-6 min-w-0">
           {/* Logo mark + wordmark */}
           <Link to="/" className="group flex items-center gap-2 sm:gap-2.5 shrink-0">
-            <img src="/logo.png" alt="" className="size-8 sm:size-9 shrink-0 rounded-xl shadow-sm shadow-blue-500/30" />
+            <img src="/logo.png" alt={APP_NAME} className="size-8 sm:size-9 shrink-0 rounded-xl object-contain shadow-sm shadow-blue-500/30" />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="text-sm sm:text-[15px] font-bold leading-tight tracking-tight text-slate-900 shrink-0">
