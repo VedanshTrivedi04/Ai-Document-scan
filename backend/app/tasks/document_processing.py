@@ -28,6 +28,7 @@ from app.models.document import Document, DocumentProcessingStatus
 from app.models.document_check import DocumentCheck, DocumentCheckStatus, DocumentCheckType
 from app.services.audit_service import record_event
 from app.services.check_store import sanitize_null_bytes, save_check
+from app.services import face_service
 from app.services.extraction_service import classify_and_extract
 from app.services.identity_documents import extract_identity, identity_extracted_fields
 from app.services.multi_invoice import extract_invoices
@@ -118,7 +119,14 @@ def _complete_identity_document(db, document: Document, ocr_result: OCRResult) -
     invoice-specific steps. The contradiction check is case-level and runs
     once every document of the case has finished."""
     analysis = extract_identity(get_llm_service(), ocr_result.text)
-    extracted_fields = identity_extracted_fields(analysis)
+    # The photographs on the document, compared across the bundle later
+    # (app/services/face_service.py). Best effort: never fails the extraction.
+    try:
+        content = get_storage_service_for_task().download_bytes(document.blob_storage_path)
+        faces = face_service.analyse_document(content)
+    except Exception as exc:  # noqa: BLE001
+        faces = {"status": face_service.STATUS_FAILED, "items": [], "error": str(exc)[:300]}
+    extracted_fields = identity_extracted_fields(analysis, faces)
     try:
         fields_located = attach_field_locations(ocr_result.pages, extracted_fields)
     except Exception:  # noqa: BLE001 - a missing highlight never fails the extraction
@@ -138,6 +146,8 @@ def _complete_identity_document(db, document: Document, ocr_result: OCRResult) -
             "document_type": analysis.document_type,
             "document_type_confidence": analysis.document_type_confidence,
             "fields_located": fields_located,
+            "faces_found": len(faces.get("items") or []),
+            "faces_status": faces.get("status"),
             "schema": "identity",
         },
     )
@@ -191,6 +201,19 @@ def process_document(document_id: str, company_id: str | None = None) -> None:
             if identity_case:
                 _complete_identity_document(db, document, ocr_result)
                 return
+            pdf_bytes = None
+            if _is_pdf(document):
+                try:
+                    pdf_bytes = storage.download_bytes(document.blob_storage_path)
+                except Exception:  # noqa: BLE001 - only the PDF-based steps need it
+                    pdf_bytes = None
+            # Font consistency needs the PDF and the OCR, not the model. Run it
+            # (and keep its result) BEFORE the model is asked, so a model outage
+            # or a spent quota cannot silently skip the strongest tamper signal
+            # while the document is marked failed. It is also stored before the
+            # document is marked complete, so a case is never scored without it.
+            _run_font_consistency(db, document, pdf_bytes, ocr_result.pages)
+            db.commit()
             analysis = classify_and_extract(get_llm_service(), ocr_result.text)
 
             document.document_type = analysis.document_type
@@ -212,12 +235,6 @@ def process_document(document_id: str, company_id: str | None = None) -> None:
                 fields_located = attach_field_locations(ocr_result.pages, extracted_fields)
             except Exception:  # noqa: BLE001
                 fields_located = 0
-            pdf_bytes = None
-            if _is_pdf(document):
-                try:
-                    pdf_bytes = storage.download_bytes(document.blob_storage_path)
-                except Exception:  # noqa: BLE001 - only the PDF-based steps below need it
-                    pdf_bytes = None
             # Line items read from the OCR layout itself (one-row fee tables,
             # "rate PER unit X qty = total" lines, PAID/DUE markers) and the
             # PDF's producer info — app/services/line_item_parsing.py. Best
@@ -241,9 +258,6 @@ def process_document(document_id: str, company_id: str | None = None) -> None:
                     extracted_fields["invoices"] = invoices
             except Exception:  # noqa: BLE001
                 pass
-            # Before the document is marked complete, so the case is never
-            # scored without it.
-            _run_font_consistency(db, document, pdf_bytes, ocr_result.pages)
             document.extracted_fields = sanitize_null_bytes(extracted_fields)
             document.processing_status = DocumentProcessingStatus.complete
             document.processing_error = None

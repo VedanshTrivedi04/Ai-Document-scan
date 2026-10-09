@@ -297,6 +297,7 @@ def _seed_case(factory, case_type: CaseType, filenames: list[tuple[str, str]]) -
 def pipeline_fakes(monkeypatch):
     storage = MagicMock()
     storage.get_download_url.return_value = "https://fake.blob.core.windows.net/signed-url"
+    storage.download_bytes.return_value = b"not an image"  # no face to find
     monkeypatch.setattr(document_processing_module, "get_storage_service_for_task", lambda: storage)
 
     ocr = MagicMock()
@@ -350,6 +351,10 @@ def test_identity_document_stores_the_persons_details_with_positions(task_sessio
         ).scalar_one()
         assert event_data["schema"] == "identity"
         assert event_data["fields_located"] >= 5
+        # A document with no readable photograph is still processed; the check says why.
+        assert stored["faces"]["items"] == []
+        assert stored["faces"]["status"] in {"ok", "failed", "unavailable"}
+        assert event_data["faces_found"] == 0
     finally:
         session.close()
 
@@ -357,9 +362,9 @@ def test_identity_document_stores_the_persons_details_with_positions(task_sessio
     llm.extract_identity.assert_called_once()
     llm.classify_and_extract.assert_not_called()
     assert llm.extract_identity.call_args.kwargs["document_type_labels"] == IDENTITY_DOCUMENT_TYPE_LABELS
-    # No invoice checks, and no PDF download for the invoice-only steps.
+    # No invoice checks; the file is fetched once, for the photograph check.
     assert pipeline_fakes["calls"]["document_checks"] == []
-    pipeline_fakes["storage"].download_bytes.assert_not_called()
+    pipeline_fakes["storage"].download_bytes.assert_called_once()
 
 
 def test_case_comparison_is_queued_once_every_document_has_finished(task_session_factory, pipeline_fakes):

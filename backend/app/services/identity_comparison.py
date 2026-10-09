@@ -32,6 +32,7 @@ from typing import Any
 from rapidfuzz.distance import OSA
 
 from app.models.cross_document_finding import FindingSeverity
+from app.services import face_service
 from app.services.identity_messages import describe_finding, display_value
 
 FINDING_TYPE = "identity_consistency"
@@ -49,6 +50,10 @@ COMPARED_FIELDS = (
     "annual_income",
     "id_number",
 )
+
+# The photographs on the documents are compared as one more "field"
+# (app/services/face_service.py); it has no text value of its own.
+PHOTO_FIELD = "photo"
 
 # Identity numbers are compared only between two cards of the same kind: a
 # person has one of each, whereas two certificates legitimately carry
@@ -419,6 +424,37 @@ class BundleDocument:
     filename: str
     document_type: str | None
     identity_fields: dict[str, dict[str, Any]]
+    # Faces found on the document: dicts with `bounding_box` and `embedding`
+    # (extracted_fields["faces"]["items"]). Empty when none were found or the
+    # face models are not installed.
+    faces: tuple[dict[str, Any], ...] = ()
+
+
+def compare_photos(doc_a: "BundleDocument", doc_b: "BundleDocument") -> Verdict | None:
+    """Do the photographs on two documents show the same person? None when
+    either document has no usable face. The most alike pair of faces decides,
+    so a small repeated photograph or a second person on a family document
+    does not raise a conflict by itself."""
+    best = face_service.best_match(list(doc_a.faces), list(doc_b.faces))
+    if best is None:
+        return None
+    score = round(best[0], 3)
+    if score >= face_service.MATCH_THRESHOLD:
+        return Verdict(HARMLESS, "photo_match", FindingSeverity.info, {"similarity": score})
+    if score >= face_service.DIFFERENT_THRESHOLD:
+        return _conflict("photo_uncertain", FindingSeverity.medium, similarity=score)
+    return _conflict("photo_different_person", FindingSeverity.critical, similarity=score)
+
+
+def _photo_evidence(doc: "BundleDocument", face: dict[str, Any], same_type: bool) -> dict[str, Any]:
+    return {
+        "document_id": doc.id,
+        "document_type": doc.document_type,
+        "document_filename": doc.filename,
+        "distinguish_by_filename": same_type,
+        "value": "photograph",
+        "bounding_box": face.get("bounding_box"),
+    }
 
 
 def compare_field(field_name: str, doc_a: BundleDocument, doc_b: BundleDocument) -> Verdict | None:
@@ -432,7 +468,27 @@ def compare_field(field_name: str, doc_a: BundleDocument, doc_b: BundleDocument)
     field_b = doc_b.identity_fields.get(field_name) or {}
     if field_a.get("value") in (None, "") or field_b.get("value") in (None, ""):
         return None
-    return _COMPARERS[field_name](field_a, field_b)
+    verdict = _COMPARERS[field_name](field_a, field_b)
+    return _doubted(verdict, field_a, field_b)
+
+
+def _doubted(verdict: Verdict | None, field_a: dict[str, Any], field_b: dict[str, Any]) -> Verdict | None:
+    """A serious-looking conflict that rests on a value the reader itself was not
+    sure of ("SAMRIDDH] GUPTS" on a photographed passbook) is as likely a
+    misreading as a real difference: it is raised for a person to check
+    (medium) instead of as "different person" (critical). Differences that
+    were already minor, and findings about harmless variants, are untouched."""
+    if (
+        verdict is None
+        or verdict.classification != CONFLICT
+        or verdict.severity not in (FindingSeverity.high, FindingSeverity.critical)
+        or not (field_a.get("uncertain") or field_b.get("uncertain"))
+    ):
+        return verdict
+    return _conflict(
+        "unclear_reading", FindingSeverity.medium,
+        was=verdict.reason, was_severity=verdict.severity.value, **(verdict.detail or {}),
+    )
 
 
 def _evidence(field_name: str, doc: BundleDocument, same_type: bool) -> dict[str, Any]:
@@ -474,4 +530,28 @@ def find_identity_contradictions(documents: list[BundleDocument]) -> list[dict[s
                     "detail": verdict.detail,
                 }
             )
+        findings.extend(_photo_finding(doc_a, doc_b, same_type))
     return findings
+
+
+def _photo_finding(doc_a: BundleDocument, doc_b: BundleDocument, same_type: bool) -> list[dict[str, Any]]:
+    verdict = compare_photos(doc_a, doc_b)
+    if verdict is None:
+        return []
+    _, face_a, face_b = face_service.best_match(list(doc_a.faces), list(doc_b.faces))
+    evidence = [_photo_evidence(doc_a, face_a, same_type), _photo_evidence(doc_b, face_b, same_type)]
+    return [
+        {
+            "field_name": PHOTO_FIELD,
+            "finding_type": FINDING_TYPE,
+            "classification": verdict.classification,
+            "reason": verdict.reason,
+            "severity": verdict.severity,
+            "description": describe_finding(
+                PHOTO_FIELD, verdict.classification, verdict.reason, evidence, verdict.detail
+            ),
+            "document_ids": [doc_a.id, doc_b.id],
+            "evidence": evidence,
+            "detail": verdict.detail,
+        }
+    ]

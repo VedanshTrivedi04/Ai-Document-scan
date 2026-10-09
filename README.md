@@ -47,6 +47,17 @@ cd backend
 python -m scripts.demo_identity_bundles
 ```
 
+**Also checks the photographs.** When identity cards carry a photograph, the faces on every document of a
+bundle are compared and a face that does not look like the others is flagged, highlighted on both pages
+(local pre-trained models, nothing sent to a cloud service). An identity case cannot be approved while a
+high or critical contradiction is undecided. See [`docs/FACE_CHECK.md`](docs/FACE_CHECK.md); install the
+models with `python -m app.services.face_models`.
+
+**Measured, not assumed.** [`AIML_Deep_Analysis.md`](AIML_Deep_Analysis.md) lists every AI/ML component with
+what was measured for it, including the image-forensics sensitivity benchmark
+(`python -m scripts.forensics_sensitivity`) and an end-to-end run of the real pipeline on the real samples
+(`RUN_E2E=1 pytest tests/e2e -s`, see the file's docstring).
+
 ## User Manuals
 
 - 🏢 **[Company User Manual](docs/COMPANY_USER_MANUAL.md)** — Step-by-step operational guide for client organizations covering all 3 company roles (**User/Submitter**, **Reviewer L1/Analyst**, **Reviewer L2/Supervisor**), case submission, bulk uploads, review workflows, automated checks, and company settings.

@@ -193,6 +193,12 @@ class Settings(BaseSettings):
     vision_llm_api_key: str | None = Field(default=None, alias="VISION_LLM_API_KEY")
     vision_llm_model: str | None = Field(default=None, alias="VISION_LLM_MODEL")
 
+    # --- Photograph comparison (app/services/face_service.py) ---
+    # Folder holding the two pre-trained face models; install them with
+    # `python -m app.services.face_models`. Without them the face check
+    # reports "unavailable".
+    face_model_dir: str = Field(default="./models/face", alias="FACE_MODEL_DIR")
+
     # --- Translation (app/services/translation_service.py) ---
     # Google Cloud Translation API key. Without it, messages are available in
     # English and in the languages with a built-in catalog (Hindi); any other

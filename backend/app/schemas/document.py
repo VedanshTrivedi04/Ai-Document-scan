@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.services.face_service import public_extracted_fields
 from app.services.check_summaries import summarize_document_checks
 from app.services.field_exception_service import with_field_regions
 
@@ -126,7 +127,7 @@ class CaseDocumentSummary(BaseModel):
             original_filename=document.original_filename,
             document_type=document.document_type,
             processing_status=document.processing_status.value,
-            extracted_fields=document.extracted_fields,
+            extracted_fields=public_extracted_fields(document.extracted_fields),
             processing_error=document.processing_error,
             content_type=document.content_type,
             file_size_bytes=document.file_size_bytes,

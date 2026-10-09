@@ -209,6 +209,32 @@ def test_font_check_failure_never_fails_the_extraction(
     assert events == {"document_processing_completed", "font_consistency_failed"}
 
 
+def test_font_check_survives_a_model_failure(task_session_factory, seeded_document_id, monkeypatch):
+    """The font check needs the PDF and the OCR, not the model. When the model
+    fails (an outage, a spent quota), the document is marked failed but the
+    check is still recorded: the strongest tamper signal is not silently lost."""
+    _patch_storage(monkeypatch)
+    fake_ocr = MagicMock()
+    fake_ocr.analyze_url.return_value = OCRResult(text="INVOICE #1 Total: $10")
+    monkeypatch.setattr(document_processing_module, "get_ocr_service", lambda: fake_ocr)
+    fake_llm = MagicMock()
+    fake_llm.classify_and_extract.side_effect = RuntimeError("429 rate limit: tokens per day")
+    monkeypatch.setattr(document_processing_module, "get_llm_service", lambda: fake_llm)
+
+    document_processing_module.process_document(str(seeded_document_id))
+
+    session = task_session_factory()
+    document = session.get(Document, seeded_document_id)
+    assert document.processing_status == DocumentProcessingStatus.failed
+    assert "rate limit" in document.processing_error
+    font = session.query(DocumentCheck).filter_by(
+        document_id=seeded_document_id, check_type=DocumentCheckType.font_consistency
+    ).one()
+    assert font.status == DocumentCheckStatus.completed
+    events = {e.event_type for e in session.query(AuditLog).filter_by(document_id=seeded_document_id)}
+    assert events == {"font_consistency_completed", "document_processing_failed"}
+
+
 def test_process_document_failure_marks_failed_with_reason(
     task_session_factory, seeded_document_id, monkeypatch
 ):

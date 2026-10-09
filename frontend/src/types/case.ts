@@ -538,6 +538,7 @@ export const IDENTITY_FIELD_LABELS: Record<string, string> = {
   annual_income: "Annual income",
   issuing_authority: "Issued by",
   issue_date: "Issue date",
+  photo: "Photograph",
 }
 
 export interface CrossDocumentRegion extends FieldRegion {

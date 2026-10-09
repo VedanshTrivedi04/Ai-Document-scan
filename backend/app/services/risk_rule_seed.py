@@ -65,6 +65,55 @@ def _finding(check_type: str, **kw: Any) -> dict[str, Any]:
     return {"match": "finding", "check_type": check_type, **kw}
 
 
+def _identity_rule(rule_id: str, field_name: str, severities: list[str], weight: int, severity: str, what: str) -> dict[str, Any]:
+    """A contradiction between the documents of one person (app/services/
+    identity_comparison.py). Only conflicts carry a severity above "info", so a
+    difference judged harmless never scores; a conflict a reviewer dismissed is
+    left out of the evidence (risk_scoring_service._gather_evidence)."""
+    return {
+        "rule_id": rule_id,
+        "category": CONSISTENCY,
+        "check_type": "cross_document_consistency",
+        "condition": {"match": "cross_document", "field_name": field_name, "severity_in": severities},
+        "weight": weight,
+        "severity": severity,
+        "reason_template": f"{what} {{description}}",
+    }
+
+
+# The weights put a contradiction that suggests another person (a different
+# name, another face) at "high" on its own, and a possible slip of the pen at
+# "medium" or below. Tiers: medium from 30, high from 60.
+IDENTITY_RULES: list[dict[str, Any]] = [
+    _identity_rule("identity.name_different_person", "full_name", ["critical"], 60, "high",
+                   "The documents show different names."),
+    _identity_rule("identity.name_possible_error", "full_name", ["medium"], 15, "medium",
+                   "A name differs slightly (a slip of the pen, or a value read unclearly)."),
+    _identity_rule("identity.parent_name_different", "parent_or_spouse_name", ["critical"], 40, "high",
+                   "The documents name a different father or husband."),
+    _identity_rule("identity.parent_name_possible_error", "parent_or_spouse_name", ["medium"], 10, "medium",
+                   "A father's or husband's name differs slightly (a slip of the pen, or a value read unclearly)."),
+    _identity_rule("identity.dob_year_mismatch", "date_of_birth", ["high"], 45, "high",
+                   "The documents show different dates of birth."),
+    _identity_rule("identity.dob_minor_mismatch", "date_of_birth", ["medium"], 15, "medium",
+                   "A date of birth differs slightly (one digit, or a value read unclearly)."),
+    _identity_rule("identity.gender_mismatch", "gender", ["high"], 40, "high",
+                   "The documents state different genders."),
+    _identity_rule("identity.address_mismatch", "address", ["medium"], 15, "medium",
+                   "The documents show a different locality, city or postal code (or one was read unclearly)."),
+    _identity_rule("identity.income_far_apart", "annual_income", ["critical"], 40, "high",
+                   "The stated incomes are far apart."),
+    _identity_rule("identity.income_apart", "annual_income", ["high"], 25, "medium",
+                   "The stated incomes differ markedly."),
+    _identity_rule("identity.id_number_mismatch", "id_number", ["high"], 40, "high",
+                   "Two documents of one kind carry different numbers."),
+    _identity_rule("identity.photo_different_person", "photo", ["critical"], 60, "high",
+                   "The photographs show different people."),
+    _identity_rule("identity.photo_uncertain", "photo", ["medium"], 20, "medium",
+                   "The photographs could not be matched."),
+]
+
+
 SEED_RULES: list[dict[str, Any]] = [
     # ---------------------------------------------------------------- metadata
     {
@@ -740,7 +789,7 @@ SEED_RULES: list[dict[str, Any]] = [
         "severity": "high",
         "reason_template": "The signature on '{document}' is pixel-identical to the reference on file for {person}, yet the printed signer beneath it differs. {reason}",
     },
-]
+] + IDENTITY_RULES
 
 
 # The version of each built-in rule's definition, where it is past 1. Bumped

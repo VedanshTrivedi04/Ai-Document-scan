@@ -105,6 +105,9 @@ class Doc:
     name_hi: str | None = None
     parent_hi: str | None = None
     address_hi: str | None = None
+    # A portrait (image bytes) printed on the card, for the photograph check
+    # (scripts/generate_photo_bundles.py). The page is then wider.
+    photo: bytes | None = None
 
     @property
     def hindi(self) -> bool:
@@ -212,14 +215,19 @@ p { margin: 5px 0 0 0; }
 """
 
 _LEFT, _RIGHT, _LABEL_RIGHT, _VALUE_LEFT, _BOTTOM = 28, 392, 160, 170, 262
+_PHOTO_COLUMN = 110  # extra page width for a portrait
 
 
 def render_pdf(doc: Doc, devanagari_font: Path | None) -> pymupdf.Document:
     """One page: heading, then one row per detail (label left, value right),
     each placed explicitly so labels and values never run into each other."""
     pdf = pymupdf.open()
-    page = pdf.new_page(width=420, height=300)
-    page.draw_rect(pymupdf.Rect(12, 12, 408, 288), color=(0.3, 0.3, 0.3), width=1)
+    page = pdf.new_page(width=420 + (_PHOTO_COLUMN if doc.photo else 0), height=300)
+    page.draw_rect(pymupdf.Rect(12, 12, page.rect.width - 12, 288), color=(0.3, 0.3, 0.3), width=1)
+    if doc.photo:
+        left = _RIGHT + 18
+        page.insert_image(pymupdf.Rect(left, 58, left + 90, 173), stream=doc.photo, keep_proportion=True)
+        page.draw_rect(pymupdf.Rect(left, 58, left + 90, 173), color=(0.3, 0.3, 0.3), width=0.6)
     archive, css = None, _CSS % "sans-serif"
     if doc.hindi:
         if devanagari_font is None:
@@ -249,7 +257,7 @@ def render_pdf(doc: Doc, devanagari_font: Path | None) -> pymupdf.Document:
         )
         y += used + 3
     page.insert_htmlbox(
-        pymupdf.Rect(_LEFT, 268, _RIGHT, 284),
+        pymupdf.Rect(_LEFT, 268, page.rect.width - 28, 284),
         "<p class='specimen'>SPECIMEN - SYNTHETIC TEST DOCUMENT - NOT A REAL RECORD</p>",
         css=css, archive=archive,
     )

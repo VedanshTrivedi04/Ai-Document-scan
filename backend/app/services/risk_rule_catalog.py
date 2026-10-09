@@ -70,7 +70,11 @@ SUB_CHECKS = [
     "stamp_issuer_consistency", "installment_consistency", "date_sequence", "stamp_authenticity",
     "synthetic_stamp_unsigned", "fake_scan_watermark", "tax_invoice_trn", "multiple_invoices", "per_invoice_checks",
 ]
-CROSS_FIELDS = ["amount", "date", "issuer"]
+CROSS_FIELDS = [
+    "amount", "date", "issuer",
+    # one person's documents (app/services/identity_comparison.py)
+    "full_name", "parent_or_spouse_name", "date_of_birth", "gender", "address", "annual_income", "id_number", "photo",
+]
 # "consistent" is the good outcome; a rule that fires on it would be a mistake.
 SIGNATURE_RESULTS = [
     "inconsistent", "possibly_consistent", "cannot_determine", "identical_reuse", "reused_different_signer",
@@ -80,7 +84,7 @@ MATCH_KINDS = [
     ("finding", "A specific finding from a check", "e.g. ELA reports a recompression region"),
     ("check_result", "A check's overall result is Flag", "fires once per document where the check flagged"),
     ("sub_check", "A field-validation rule failed", "e.g. the total does not match subtotal + tax"),
-    ("cross_document", "Two documents disagree on a field", "issuer, date or amount, optionally by severity"),
+    ("cross_document", "Two documents disagree on a field", "issuer, date, amount or a detail of a person (name, date of birth, address, photograph...), optionally by severity"),
     ("signature_match", "A signature comparison verdict", "advisory visual comparison against a reference"),
 ]
 

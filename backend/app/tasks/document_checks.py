@@ -249,6 +249,7 @@ def _bundle_documents(documents: list[Document]) -> list[BundleDocument]:
             filename=d.original_filename,
             document_type=d.document_type,
             identity_fields=d.extracted_fields["identity_fields"],
+            faces=tuple((d.extracted_fields.get("faces") or {}).get("items") or ()),
         )
         for d in sorted(documents, key=lambda d: (d.created_at, str(d.id)))
         if is_identity_extraction(d.extracted_fields)

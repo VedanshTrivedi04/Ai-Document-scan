@@ -20,6 +20,10 @@ COPY alembic.ini seed.py start-api.sh start-worker.sh start-beat.sh ./
 # A Windows checkout gives these scripts CRLF line endings, which sh rejects.
 RUN sed -i 's/\r$//' start-api.sh start-worker.sh start-beat.sh
 COPY app ./app
+# The two pre-trained face models (about 39 MB in all, OpenCV Zoo) for the
+# photograph check. If the download fails the image still builds and the
+# check reports "unavailable" (see app/services/face_service.py).
+RUN python -m app.services.face_models || echo "WARNING: face models not downloaded"
 
 EXPOSE 8000
 # The same image runs the API and the Celery worker; the command is set per service.
