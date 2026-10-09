@@ -63,9 +63,9 @@ const Navbar = () => {
           <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
         </nav>
         <div className="hidden md:flex items-center gap-6">
-          <Link to="/login" className="text-sm font-bold text-white/70 hover:text-white transition-colors">Log In</Link>
+          <Link to="/login?tab=signin" className="text-sm font-bold text-white/70 hover:text-white transition-colors">Log In</Link>
           <MagneticButton>
-            <Link to="/login" className="bg-white text-black px-6 py-3 rounded-full text-sm font-bold hover:bg-gray-200 transition-all flex items-center gap-2 shadow-xl">
+            <Link to="/login?tab=signup" className="bg-white text-black px-6 py-3 rounded-full text-sm font-bold hover:bg-gray-200 transition-all flex items-center gap-2 shadow-xl">
               Open App
               <ArrowRight className="w-4 h-4" />
             </Link>
@@ -215,7 +215,7 @@ const CinematicScroll = () => {
         {/* Hero CTA Button */}
         <div className="mt-8 opacity-0 s1-words">
           <MagneticButton>
-            <Link to="/login" className="bg-blue-600 text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-blue-700 transition-all shadow-2xl flex items-center gap-2">
+            <Link to="/login?tab=signup" className="bg-blue-600 text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-blue-700 transition-all shadow-2xl flex items-center gap-2">
               Get Started Free <ArrowRight className="w-5 h-5" />
             </Link>
           </MagneticButton>
@@ -482,7 +482,7 @@ const PracticalSections = () => {
             </p>
             <div className="pt-8 flex justify-center">
               <MagneticButton>
-                <Link to="/login" className="bg-white text-black px-12 py-6 rounded-full font-bold text-xl hover:bg-gray-200 transition-colors inline-flex items-center gap-3">
+                <Link to="/login?tab=signup" className="bg-white text-black px-12 py-6 rounded-full font-bold text-xl hover:bg-gray-200 transition-colors inline-flex items-center gap-3">
                   Start Analyzing <ArrowRight className="w-6 h-6" />
                 </Link>
               </MagneticButton>

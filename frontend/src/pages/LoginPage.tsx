@@ -56,8 +56,16 @@ export function LoginPage() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const initialEmail = searchParams.get("email") || ""
+  const initialTab = (searchParams.get("tab") as TabMode) || "signin"
 
-  const [tab, setTab] = React.useState<TabMode>("signin")
+  const [tab, setTab] = React.useState<TabMode>(initialTab)
+  
+  React.useEffect(() => {
+    const tabParam = searchParams.get("tab") as TabMode
+    if (tabParam === "signin" || tabParam === "signup") {
+      setTab(tabParam)
+    }
+  }, [searchParams])
   const [formError, setFormError] = React.useState<string | null>(null)
   const [showPassword, setShowPassword] = React.useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false)
