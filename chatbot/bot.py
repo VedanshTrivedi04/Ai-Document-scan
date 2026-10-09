@@ -436,14 +436,10 @@ async def handle_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     try:
         reply = await ask_sarthi_assistant(text, session_context)
-        await update.message.reply_text(reply, parse_mode=ParseMode.MARKDOWN)
+        await _safe_reply(update, reply)
     except Exception as e:
         logger.error(f"Error handling chat message: {e}", exc_info=True)
-        # Fallback without markdown parsing in case of special formatting
-        try:
-            await update.message.reply_text(reply)
-        except Exception:
-            await update.message.reply_text("Kripya apna sawal dobara poochein ya `/help` dekhein.")
+        await _safe_reply(update, "Kripya apna sawal dobara poochein ya `/help` dekhein.")
 
 def main():
     """Starts the Sarthi Telegram Bot."""

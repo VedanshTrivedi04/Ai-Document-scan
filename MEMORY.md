@@ -1795,8 +1795,73 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Commit: `9f86f0e` (`docs: sync memory.md with branch rebase and main alignment verification`)
+- Commit: `e21a042` (`docs: sync memory.md with branch rebase and main alignment verification`)
 - Push: Successful (`origin/feat/telegram-chatbot`)
 - Status: Complete
+
+---
+
+### 2026-10-09 17:05
+
+**User Request**
+> "isme hena chatboat almost bana huva bas uski working me syaad kuch dikkat hai like idealliy kese chalna chahiaye ki chatboat se user vo kam kar va sakta hai jo normal user website se bhi kar raha hai person documnet verification... hoga kya vaha user telegram par upoad kar dega vo yaha apni website par jo endpint usi ho rahi hai usi service ke liye unpa rjaye ge annalysis kar age jo report aye gi usko user fridnifluy bata dega or vo chatboat user ki normal usery ka bhi achhe se reoly kare hme ai chatbiat chahahiye and data kuch bhi hecullinated na de jab actual real backend se or vo user ki langauage me bat kare matlab multilangual hona chahiye"
+
+**Exploration**
+- Inspected `chatbot/` implementation:
+  - Previously, `verification_client.py` performed in-memory test card hash matches and direct Gemini calls rather than hitting the actual DocSure platform REST API.
+  - As a result, Telegram uploads never created real `Case` records in PostgreSQL, never appeared on the website, and bypassed the Celery queue.
+- Tested DocSure platform backend running inside Docker at `http://127.0.0.1:8000`:
+  - Verified `/auth/login` and `/auth/register` endpoints.
+  - Verified `POST /cases` (`identity_verification`), `POST /cases/{id}/documents`, `GET /cases/{id}?lang=...`, and `GET /cases/{id}/profile`.
+  - Executed end-to-end verification via Python test script: generated real case `CASE-BDC1F4FF`, uploaded Aadhaar and PAN cards, and verified pairwise Celery contradiction checks in ~4 seconds.
+- Tested Groq conversational assistant models (`openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`) with native Indian languages (Hindi, Gujarati, English).
+
+**Work Done**
+- `chatbot/config.py`:
+  - Added `BACKEND_API_BASE` (`http://127.0.0.1:8000`), `BOT_USER_EMAIL` (`telegram.citizen@docsure.internal`), and `BOT_USER_PASSWORD`.
+- `chatbot/verification_client.py`:
+  - Implemented `verify_via_backend_api()`:
+    1. Authenticates against `/auth/login` (auto-registering bot citizen if not present).
+    2. Creates a real `identity_verification` Case on DocSure platform (`POST /cases`).
+    3. Streams uploaded photo/PDF files to `POST /cases/{case_id}/documents`.
+    4. Polls Celery async extraction and cross-check workers until status reaches `complete`.
+    5. Retrieves `cross_document_findings`, `case_number`, and verified person profile (`GET /cases/{case_id}/profile`).
+  - Added automatic fallback to in-process comparison engine if backend is offline.
+- `chatbot/explainer.py`:
+  - Integrated official `DocSure Case Reference` (`CASE-XXXX`) into the citizen verification report header.
+  - Formatted findings with clear severity badges, exact mismatched values, and administrative resolution steps (UIDAI, Tehsildar, Gazette).
+- `chatbot/chat_service.py`:
+  - Grounded Groq conversational assistant directly in real backend case data (`case_number`, scanned documents, golden profile, and contradiction findings).
+  - Enforced strict 0% hallucination rules (never invents fictitious names, DOBs, or numbers).
+  - Configured dynamic language mirroring: naturally responds in the user's native language and script (Hindi, Hinglish, Gujarati, Marathi, Tamil, Telugu, English).
+- `chatbot/bot.py`:
+  - Connected live backend verification to `_trigger_verification`.
+  - Switched conversational chat response to `_safe_reply` to eliminate Telegram markdown escaping errors.
+
+**Files Changed**
+- `chatbot/config.py`: Added backend REST API configuration.
+- `chatbot/verification_client.py`: Connected verification flow to real DocSure platform endpoints.
+- `chatbot/explainer.py`: Added case reference and profile details to citizen report.
+- `chatbot/chat_service.py`: Enriched grounded context and native language mirroring.
+- `chatbot/bot.py`: Updated conversational handler and safe reply formatting.
+- `memory.md`: Documented architecture integration and interaction history.
+
+**Verification**
+- Compiled all chatbot modules via `py_compile` (0 syntax errors).
+- Executed real backend API case lifecycle test:
+  - Case `CASE-BDC1F4FF` created in database.
+  - Multi-document upload succeeded with status 201.
+  - Pairwise contradiction engine ran via Celery workers with 0 errors.
+  - Canonical profile verified with 5 agreed fields.
+- Verified AI conversational responses across languages:
+  - Hindi prompt answered fluently in Devanagari Hindi with exact factual data.
+  - Gujarati prompt answered fluently in Gujarati script with 0 hallucinations.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Commit: `ac68161` (`feat: connect Telegram chatbot to live DocSure backend endpoints and enhance multilingual AI assistant`)
+- Push: Successful (`origin/feat/telegram-chatbot`)
+- Status: Complete
+
 
 

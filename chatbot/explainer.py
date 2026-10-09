@@ -19,12 +19,15 @@ def format_citizen_report(data: Dict[str, Any], lang: str = "hi") -> str:
     harmless_variants = data.get("harmless_variants", [])
     conflicts = data.get("conflicts", [])
 
+    case_num = data.get("case_number")
     lines = [
         "══════════════════════════",
         "🇮🇳 *SARTHI CITIZEN ASSISTANT*",
         f"📋 *Bundle Jaanch Report ({total_docs} Dastavej)*",
         "══════════════════════════\n"
     ]
+    if case_num:
+        lines.append(f"📌 *DocSure Case Reference:* `{case_num}`\n")
 
     # Scanned documents overview
     if scanned_docs:

@@ -13,18 +13,23 @@ import logging
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-
-# Ensure backend path is on sys.path
+import httpx
+# Ensure chatbot and backend paths are on sys.path
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
 BACKEND_DIR = REPO_ROOT / "backend"
 GROUND_TRUTH_PATH = REPO_ROOT / "sample-documents" / "identity-bundles" / "ground_truth.json"
 TEST_CARDS_DIR = REPO_ROOT / "sample-documents" / "test-cards"
 
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+
+from config import BACKEND_API_BASE, BOT_USER_EMAIL, BOT_USER_PASSWORD
 
 logger = logging.getLogger(__name__)
 
@@ -702,18 +707,219 @@ def get_document_preview_summary(bundle_doc: BundleDocument, index: int = 1) -> 
     return "\n".join(lines)
 
 
-async def verify_documents(doc_paths: List[Path]) -> Dict[str, Any]:
+_CACHED_TOKEN: Optional[str] = None
+
+
+def _get_backend_auth_headers() -> Dict[str, str]:
+    """Authenticates against the real DocSure backend, caching JWT token."""
+    global _CACHED_TOKEN
+    client = httpx.Client(timeout=10.0)
+    if _CACHED_TOKEN:
+        try:
+            r = client.get(f"{BACKEND_API_BASE}/auth/me", headers={"Authorization": f"Bearer {_CACHED_TOKEN}"})
+            if r.status_code == 200:
+                return {"Authorization": f"Bearer {_CACHED_TOKEN}"}
+        except Exception:
+            pass
+
+    # Try login
+    try:
+        r = client.post(f"{BACKEND_API_BASE}/auth/login", json={"email": BOT_USER_EMAIL, "password": BOT_USER_PASSWORD})
+        if r.status_code == 200:
+            _CACHED_TOKEN = r.json().get("access_token")
+            return {"Authorization": f"Bearer {_CACHED_TOKEN}"}
+    except Exception as e:
+        logger.warning(f"Backend login attempt failed: {e}")
+
+    # Auto-register bot citizen if not present
+    try:
+        r = client.post(
+            f"{BACKEND_API_BASE}/auth/register",
+            json={"full_name": "Telegram Citizen", "email": BOT_USER_EMAIL, "password": BOT_USER_PASSWORD}
+        )
+        if r.status_code in (200, 201):
+            _CACHED_TOKEN = r.json().get("access_token")
+            return {"Authorization": f"Bearer {_CACHED_TOKEN}"}
+    except Exception as e:
+        logger.warning(f"Backend registration failed: {e}")
+
+    return {}
+
+
+def verify_via_backend_api(doc_paths: List[Path], lang: str = "hi") -> Optional[Dict[str, Any]]:
     """
-    Runs cross-document contradiction check using backend identity_comparison service
-    over the genuinely extracted BundleDocument list. Strictly ZERO mock data.
+    Submits uploaded citizen documents directly to the real DocSure platform backend:
+    1. Creates an identity_verification Case (/cases).
+    2. Uploads all files to the case (/cases/{case_id}/documents).
+    3. Waits for Celery pipeline (OCR + Groq extraction + pairwise cross-checks).
+    4. Retrieves cross_document_findings and verified person profile (/cases/{case_id}/profile).
     """
+    headers = _get_backend_auth_headers()
+    if not headers:
+        logger.warning("Could not obtain backend auth token, falling back to local engine.")
+        return None
+
+    try:
+        client = httpx.Client(timeout=30.0)
+
+        # 1. Create Case
+        case_resp = client.post(f"{BACKEND_API_BASE}/cases", headers=headers, json={"case_type": "identity_verification"})
+        if case_resp.status_code not in (200, 201):
+            logger.warning(f"Failed to create backend case: {case_resp.status_code} {case_resp.text}")
+            return None
+
+        case_data = case_resp.json()
+        case_id = case_data["id"]
+        case_number = case_data.get("case_number", f"CASE-{case_id[:8].upper()}")
+        logger.info(f"Created real DocSure case: {case_number} ({case_id})")
+
+        # 2. Upload documents
+        for doc_path in doc_paths:
+            suffix = doc_path.suffix.lower()
+            if suffix == ".pdf":
+                mime = "application/pdf"
+            elif suffix in (".png", ".webp"):
+                mime = "image/png"
+            else:
+                mime = "image/jpeg"
+
+            with open(doc_path, "rb") as fp:
+                u_res = client.post(
+                    f"{BACKEND_API_BASE}/cases/{case_id}/documents",
+                    headers=headers,
+                    files={"file": (doc_path.name, fp.read(), mime)}
+                )
+                if u_res.status_code not in (200, 201):
+                    logger.warning(f"Document upload failed for {doc_path.name}: {u_res.text}")
+
+        # 3. Poll Celery workers for completion
+        case_detail = None
+        for _ in range(15):
+            time.sleep(2)
+            d_res = client.get(f"{BACKEND_API_BASE}/cases/{case_id}?lang={lang}", headers=headers)
+            if d_res.status_code == 200:
+                c_json = d_res.json()
+                docs = c_json.get("documents", [])
+                if docs and all(d.get("processing_status") in ("complete", "failed") for d in docs):
+                    case_detail = c_json
+                    break
+
+        if not case_detail:
+            d_res = client.get(f"{BACKEND_API_BASE}/cases/{case_id}?lang={lang}", headers=headers)
+            if d_res.status_code == 200:
+                case_detail = d_res.json()
+
+        if not case_detail:
+            return None
+
+        # 4. Fetch Verified Profile
+        profile_data = {}
+        try:
+            p_res = client.get(f"{BACKEND_API_BASE}/cases/{case_id}/profile", headers=headers)
+            if p_res.status_code == 200:
+                profile_data = p_res.json()
+        except Exception as pe:
+            logger.warning(f"Could not fetch profile for case {case_id}: {pe}")
+
+        # 5. Transform real backend findings into citizen report structure
+        backend_findings = case_detail.get("cross_document_findings", [])
+        conflicts = []
+        harmless_variants = []
+
+        for f in backend_findings:
+            field_name = f.get("field_name", "")
+            classification = f.get("classification", "conflict")
+            severity = str(f.get("severity", "medium")).upper()
+            reason = f.get("reason", "")
+            evidence = f.get("evidence", [])
+            msg_obj = f.get("message") or {}
+
+            summary_text = msg_obj.get("summary") or f.get("description") or "Contradiction detected"
+            explanation_text = msg_obj.get("explanation") or ""
+            action_text = msg_obj.get("action") or ""
+            full_msg = f"{summary_text} {explanation_text}".strip()
+
+            doc1_name = "Document 1"
+            doc1_val = "N/A"
+            doc2_name = "Document 2"
+            doc2_val = "N/A"
+            if len(evidence) > 0:
+                d1_type = evidence[0].get("document_type", "doc_1")
+                doc1_name = DOCUMENT_LABELS.get(d1_type, evidence[0].get("document_filename", "Document 1"))
+                doc1_val = evidence[0].get("value", "N/A")
+            if len(evidence) > 1:
+                d2_type = evidence[1].get("document_type", "doc_2")
+                doc2_name = DOCUMENT_LABELS.get(d2_type, evidence[1].get("document_filename", "Document 2"))
+                doc2_val = evidence[1].get("value", "N/A")
+
+            item = {
+                "field": FIELD_LABELS.get(field_name, field_name.replace("_", " ").title()),
+                "doc1_name": str(doc1_name).title(),
+                "doc1_value": doc1_val,
+                "doc2_name": str(doc2_name).title(),
+                "doc2_value": doc2_val,
+                "severity": severity,
+                "reason": reason,
+                "message": full_msg,
+                "action": action_text,
+            }
+
+            if classification == "conflict" or severity in ("CRITICAL", "HIGH"):
+                conflicts.append(item)
+            else:
+                harmless_variants.append(item)
+
+        scanned_docs = []
+        for d in case_detail.get("documents", []):
+            dtype = d.get("document_type") or "Document"
+            fname = d.get("original_filename") or "file"
+            scanned_docs.append(f"{DOCUMENT_LABELS.get(dtype, dtype).title()}: {fname}")
+
+        # Extract Matches from verified profile
+        matches = []
+        if profile_data:
+            for pfield in profile_data.get("fields", []):
+                if pfield.get("status") == "agreed" and pfield.get("value"):
+                    label = pfield.get("label") or pfield.get("field", "").title()
+                    val = pfield.get("display_value") or pfield.get("value")
+                    matches.append(f"{label}: {val} (Verified Match)")
+
+        return {
+            "source": "backend_api",
+            "case_id": case_id,
+            "case_number": case_number,
+            "status": "CONTRADICTION_FOUND" if conflicts else "ALL_CLEARED",
+            "total_documents_scanned": len(case_detail.get("documents", doc_paths)),
+            "scanned_documents": scanned_docs,
+            "matches": matches,
+            "harmless_variants": harmless_variants,
+            "conflicts": conflicts,
+            "profile": profile_data,
+            "raw_case": case_detail,
+        }
+    except Exception as e:
+        logger.error(f"Error in verify_via_backend_api: {e}", exc_info=True)
+        return None
+
+
+async def verify_documents(doc_paths: List[Path], lang: str = "hi") -> Dict[str, Any]:
+    """
+    Primary: Runs verification directly through the real DocSure backend REST API.
+    Fallback: Uses in-process contradiction comparison if backend API is temporarily offline.
+    """
+    # 1. Primary: Real DocSure Platform API
+    real_api_result = verify_via_backend_api(doc_paths, lang=lang)
+    if real_api_result:
+        return real_api_result
+
+    # 2. Resilient Fallback: In-process engine
     if BACKEND_AVAILABLE:
         try:
             return run_backend_comparison(doc_paths)
         except Exception as e:
-            logger.error(f"Error running backend comparison: {e}", exc_info=True)
+            logger.error(f"Error running local backend comparison: {e}", exc_info=True)
 
-    # Genuine honest failure report (never invent fake people or conflicts)
+    # 3. Honest failure report (zero hallucinations)
     return {
         "status": "VERIFICATION_ERROR",
         "total_documents_scanned": len(doc_paths),

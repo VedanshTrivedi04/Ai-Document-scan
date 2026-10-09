@@ -139,6 +139,20 @@ def _build_grounded_context(session_context: Dict[str, Any]) -> str:
 
     # 2. Verification Findings
     if last_result:
+        case_ref = last_result.get("case_number")
+        if case_ref:
+            parts.append(f"\nDocSure Platform Case Reference: {case_ref}")
+
+        profile = last_result.get("profile", {})
+        if profile and profile.get("fields"):
+            parts.append("--- Verified Canonical Citizen Profile ---")
+            for pf in profile.get("fields", []):
+                val = pf.get("display_value") or pf.get("value")
+                lbl = pf.get("label") or pf.get("field", "").title()
+                st = pf.get("status", "")
+                if val:
+                    parts.append(f"  - {lbl}: {val} [{st}]")
+
         parts.append("\n--- Backend Contradiction Engine Findings ---")
         conflicts = last_result.get("conflicts", [])
         harmless = last_result.get("harmless_variants", [])
