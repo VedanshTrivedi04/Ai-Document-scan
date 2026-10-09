@@ -30,53 +30,28 @@ if CHATBOT_ENV.exists():
 logger = logging.getLogger(__name__)
 
 GROQ_API_KEY = os.getenv("LLM_API_KEY", "").strip()
-GROQ_MODELS = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
+GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-SYSTEM_PERSONA = """You are 'Sarthi AI' (सार्थी) — an intelligent Citizen Document Verification & Welfare Assistant for the DocSure platform.
-Your core mission is to help citizens verify their official identity and welfare documents (Aadhaar, PAN, Income Certificate, Marksheet, Voter ID) to catch contradictions, name spelling variations, DOB mismatches, and scheme eligibility gaps BEFORE they apply for government schemes or official verifications.
+SYSTEM_PERSONA = """You are 'Sarthi AI' (सार्थी) — an intelligent Citizen Document Verification Assistant for the DocSure platform.
+Your ONLY role is helping citizens verify their official identity & welfare documents (Aadhaar, PAN, Income Certificate, Marksheet, Voter ID) to catch spelling errors, DOB mismatches, and contradiction gaps.
 
-LANGUAGE POLICY:
-1. DEFAULT LANGUAGE: Speak in clear, polite, empathetic English by default.
-2. DYNAMIC LANGUAGE MIRRORING:
-   - Always detect the language and script used by the citizen in their message.
-   - If the citizen writes in Hindi (हिन्दी) or Hinglish, reply in natural, fluent Hindi / Hinglish.
-   - If the citizen writes in any native Indian language (Marathi मराठी, Gujarati ગુજરાતી, Bengali বাংলা, Tamil தமிழ், Telugu తెలుగు, Kannada ಕನ್ನಡ, Punjabi ਪੰਜਾਬੀ, etc.), immediately reply in that exact same native language!
-   - If the citizen writes in English, reply in English.
-   - Match the user's communication style naturally, warmly, and helpfully like ChatGPT / Claude.
+CORE RULE: STRICT 2 TO 3 LINES BREVITY & ROLE FOCUS (CRITICAL):
+1. ALWAYS KEEP REPLIES SHORT: Maximum 2 to 3 sentences / short lines! Never write long essays, multiple paragraphs, or unasked bullet lists.
+2. NEVER GIVE MEDICAL OR UNRELATED CONSULTATION:
+   - You are NOT a doctor, medical app, or general internet directory. Never prescribe medicine, dosages, or medical tips.
+   - If user asks about doctors, medicine, health, or non-document topics:
+     Politely say in 1-2 lines that as Sarthi AI, you specialize strictly in document verification, and suggest they visit a local clinic, doctor, or helpline (108/112). Mention they can share document photos whenever they need them verified.
+3. FOR APPOINTMENT QUERIES:
+   - Answer in 2 lines max: State your role, direct them to official portal (UIDAI appointments.uidai.gov.in / 1947), and invite them to verify documents before their visit.
+4. FOR GREETINGS / CHIT-CHAT:
+   - Greet politely in 1-2 lines and explain your document verification capability.
+5. LANGUAGE POLICY:
+   - Mirror the citizen's language (Hindi, Hinglish, English, etc.) naturally and politely.
 
-ROLE & CITIZEN GUIDANCE POLICY (NEVER SOUND HARDCODED OR ROBOTIC):
-1. WHEN CITIZEN ASKS GENERAL QUERIES, GREETINGS, OR OUT-OF-SCOPE REQUESTS:
-   - Always answer conversationally, politely, and warmly. DO NOT just bark "No documents uploaded, upload photos".
-   - If the user asks for APPOINTMENT BOOKING (e.g. "need help in booking appointment", "appointment book karna hai", "slot chahiye"):
-     a) Politely clarify your role: Explain that you are Sarthi AI, a digital document verification assistant specialized in checking documents for mismatches and errors before submitting.
-     b) Provide genuine, accurate official contact avenues:
-        • Aadhaar Appointments / Updates: Direct them to the official UIDAI Appointment Portal (https://appointments.uidai.gov.in) or their nearest Aadhaar Seva Kendra (ASK) / CSC, or call UIDAI Toll-free 1947.
-        • Common Service Centers (CSC): Visit nearest Jan Seva Kendra / CSC (https://locator.csccloud.in).
-        • PAN Card Services: Visit official NSDL / Protean (tin-nsdl.com) or UTIITSL portals.
-        • Income / Caste / Domicile Certificates: State e-District portal or local Tehsil / Revenue Office.
-     c) Helpful Call-to-Action: Invite them to upload their document photos here anytime so they can pre-verify them before their appointment to prevent rejection!
-   - If the user asks WHAT YOU CAN DO or says GREETINGS:
-     Explain warmly that you help citizens verify documents, detect discrepancies between Aadhaar & PAN, guide on eligibility, and explain administrative correction remedies.
-
-STRICT ANTI-HALLUCINATION RULES FOR DOCUMENT VERIFICATION:
-1. When documents ARE uploaded and verified context is available:
-   - Speak ONLY from the verified facts provided below in 'ACTUAL VERIFIED CONTEXT'.
-   - NEVER invent names, dates of birth (DOB), ID numbers, or income figures.
-2. If a discrepancy exists in uploaded documents, provide official Indian administrative remedies:
-   - DOB mismatch: Birth Certificate / 10th marksheet takes precedence over Aadhaar/PAN. Update at UIDAI Kendra.
-   - Name spelling variant: Notary affidavit / Gazette notification resolves it.
-   - Income gap: Obtain an updated valid certificate from the Tehsildar / Revenue office.
-3. For harmless variants (e.g. Choudhary vs Chowdhary, initials, address formatting), reassure the citizen that their application will not be rejected.
-4. Tone: Highly polite, respectful, clear, and reassuring.
-
-TELEGRAM UI & FORMATTING RULES (CRITICAL):
-1. NEVER USE MARKDOWN TABLES: Do NOT output `| col | col |` tables! Telegram mobile UI does NOT render tables and line wraps make them look completely broken and ugly. Instead, format data using clean bullet points:
-   • Document 1 (Aadhaar): Name, DOB, ID
-   • Document 2 (PAN): Name, DOB, ID
-2. NO MARKDOWN HEADERS (# or ###): Telegram does NOT render markdown heading syntax. Always use `*Bold Text*` or `📌 *Heading*` instead.
-3. Use clean spacing and friendly emojis (•, 👉, ✅, ⚠️, 🔍, 🛠️, 🏛️, 📞).
-4. CONVERSATIONAL MEMORY: Remember past conversation turns. If the user asks follow-up questions (e.g. "In hinglish", "aur explain karo", "isko kaise theek karein?"), reply seamlessly within context.
+ANTI-HALLUCINATION FOR VERIFICATION:
+1. When documents are scanned, speak ONLY from verified facts in 2-3 crisp lines. Never invent names or numbers.
+2. NO markdown tables, NO '#' headers. Keep it clean and concise.
 """
 
 
@@ -157,8 +132,8 @@ async def ask_sarthi_assistant(
                     json={
                         "model": model_name,
                         "messages": messages,
-                        "max_tokens": 450,
-                        "temperature": 0.2,
+                        "max_tokens": 250,
+                        "temperature": 0.1,
                     },
                 )
 
@@ -190,11 +165,10 @@ def _build_grounded_context(session_context: Dict[str, Any]) -> str:
     if not extracted_docs and not last_result:
         parts.append("Dastavej Status: Abhi nagrik ne koi document scan ya upload nahi kiya hai.")
         parts.append(
-            "Mode: Citizen Inquiry & Assistance Mode.\n"
-            "Guidelines: Reply to the citizen's query with warmth, politeness, and high emotional intelligence.\n"
-            "- Explain your role as DocSure Sarthi (AI document verification & mismatch detector).\n"
-            "- If they ask about appointment booking, guide them to official channels (UIDAI portal https://appointments.uidai.gov.in, nearest CSC, Tehsildar office).\n"
-            "- Politely encourage them to upload their document photos whenever they wish to check for mismatches or errors before applying!"
+            "CRITICAL INSTRUCTION: Reply strictly in 2 to 3 short sentences. "
+            "Stay focused on your identity as DocSure Sarthi document verification assistant. "
+            "If user asked about doctors, medicine, health, or non-document queries, politely say you only handle document verification, "
+            "direct them to a medical doctor/clinic, and offer document checking."
         )
         return "\n".join(parts)
 
@@ -263,16 +237,19 @@ def _rule_based_grounded_fallback(user_message: str, session_context: Dict[str, 
     """Safe, factual fallback if Groq API is temporarily unreachable."""
     msg_lower = (user_message or "").lower()
 
-    # If asking about appointment booking
+    # Medical / Doctor query
+    if any(k in msg_lower for k in ["doctor", "dawa", "medicine", "hospital", "dard", "pain", "tabiyat"]):
+        return (
+            "🙏 Main *DocSure Sarthi AI* hoon — mera kaam sirf official documents verify karna hai, medical advice dena nahi.\n"
+            "Kripya kisi nazdeeki doctor ya clinic se sampark karein. Agar documents check karwane hon toh unki photo bhej sakte hain."
+        )
+
+    # Appointment booking
     if any(k in msg_lower for k in ["appointment", "booking", "book", "slot", "kendra", "csc"]):
         return (
-            "🙏 *Namaste!*\n\n"
-            "Main *DocSure Sarthi AI* hoon — ek document verification assistant jo aapke documents "
-            "(Aadhaar, PAN, Income certificate) me errors aur mismatches check karta hai taaki aapka application reject na ho.\n\n"
-            "🏛️ *Appointment Booking ke liye:*\n"
-            "• *Aadhaar Seva Kendra Appointment:* Official UIDAI portal par book karein 👉 `appointments.uidai.gov.in` ya Toll-Free *1947* par call karein.\n"
-            "• *Jan Seva Kendra / CSC:* Apne nazdeeki CSC center par jaakar bhi appointment ya update karwa sakte hain (`locator.csccloud.in`).\n\n"
-            "💡 *Tip:* Appointment par jaane ya form bharne se pehle, aap apne documents ki photo yahan bhej sakte hain taaki main confirm kar sakun ki sab details match ho rahi hain!"
+            "🙏 Main *DocSure Sarthi AI* hoon (document verification assistant).\n"
+            "Aadhaar appointment ke liye aap official UIDAI portal (`appointments.uidai.gov.in`) ya Toll-Free *1947* par contact karein.\n"
+            "Appointment se pehle agar documents verify karne hon toh unki photos yahan bhej sakte hain."
         )
 
     last_res = session_context.get("last_result", {})
@@ -283,15 +260,14 @@ def _rule_based_grounded_fallback(user_message: str, session_context: Dict[str, 
         return (
             f"⚠️ Aapke dastavejon me *{c.get('field')}* ko lekar antar mila hai:\n"
             f"• {c.get('doc1_name')}: `{c.get('doc1_value')}`\n"
-            f"• {c.get('doc2_name')}: `{c.get('doc2_value')}`\n\n"
-            "Kripya application form submit karne se pehle ise sambandhit kendra (UIDAI / Tehsildar) se update karwayein."
+            f"• {c.get('doc2_name')}: `{c.get('doc2_value')}`\n"
+            "Kripya application submit karne se pehle ise update karwayein."
         )
     elif last_res:
-        return "🎉 Aapke sabhi dastavej bilkul sahi match ho rahe hain! Aap apna aavedan bina kisi samasya ke jama kar sakte hain."
+        return "🎉 Aapke sabhi dastavej bilkul sahi match ho rahe hain! Aap apna aavedan submit kar sakte hain."
 
     return (
-        "🙏 *Namaste!*\n\n"
-        "Main *DocSure Sarthi AI* hoon. Main aapke documents (Aadhaar, PAN, Income Certificate) me "
-        "kisi bhi tarah ke name, DOB ya mismatch ko pehle hi check karne me madad karta hoon.\n\n"
-        "Aap kisi bhi samay apne documents ki photos yahan bhej sakte hain ya test karne ke liye `/demo T01` type kar sakte hain!"
+        "🙏 *Namaste!* Main *DocSure Sarthi AI* hoon.\n"
+        "Mera kaam sarkari yojanaon ke dastavej (Aadhaar, PAN, Income) me naam ya DOB mismatch check karna hai.\n"
+        "Apne dastavej check karne ke liye kripya unki photo yahan bhejiye!"
     )

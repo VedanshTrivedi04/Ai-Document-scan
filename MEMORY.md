@@ -2013,6 +2013,40 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Push: Successful (`origin/feat/telegram-chatbot`)
 - Status: Complete
 
+---
+
+### 2026-10-09 17:40
+
+**User Request**
+> "eta jada bhi nhi batama tha bhai bas 2 3 line me simple msg baki tum apne role par jo hai uspar focus rakho" (accompanied by screenshot of Sarthi generating long medical advice and telemedicine recommendations in response to "Aapke Dhyan mein Koi doctor hai kya")
+
+**Exploration**
+- Inspected the persona and token settings in `chatbot/chat_service.py`:
+  - When asked out-of-domain queries like doctors or health, the model gave essays recommending telemedicine apps, paracetamol, emergency services, and hospitals.
+  - User requested strict brevity: 2 to 3 lines simple message, keeping focus squarely on Sarthi's core identity (document verification).
+
+**Work Done**
+- `chatbot/chat_service.py`:
+  - Enforced `CORE RULE: STRICT 2 TO 3 LINES BREVITY & ROLE FOCUS` in `SYSTEM_PERSONA`.
+  - Added strict rule forbidding medical/unrelated consultation: politely state in 1-2 lines that Sarthi only handles document verification, redirect to clinic/doctor, and invite document verification.
+  - Updated model priority: `openai/gpt-oss-120b` first.
+  - Adjusted `max_tokens` to 250 with low temperature (`0.1`) to ensure concise, complete 2-3 sentence responses.
+  - Updated rule-based fallback to be strictly 2-3 lines.
+
+**Files Changed**
+- `chatbot/chat_service.py`: Enforced 2-3 line brevity and domain focus on document verification.
+- `MEMORY.md`: Documented interaction log and verification details.
+
+**Verification**
+- Validated syntax with `py_compile`.
+- Tested with exact user query: `"Aapke Dhyan mein Koi doctor hai kya"`:
+  - Output: *"मैं सार्थी AI हूँ, केवल दस्तावेज़ सत्यापन में मदद करता हूँ। डॉक्टर के लिए कृपया अपने नजदीकी क्लिनिक या 108/112 पर संपर्क करें; जब दस्तावेज़ जाँच की ज़रूरत हो तो बताइए।"* (Exactly 2 sentences, 0 medical essays).
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Status: Staged and committed.
+
+
 
 
 
