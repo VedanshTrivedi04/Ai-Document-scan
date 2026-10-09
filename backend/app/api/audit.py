@@ -33,7 +33,7 @@ from app.schemas.settings import AuditEventResponse, AuditPage
 router = APIRouter(
     prefix="/audit-log",
     tags=["audit"],
-    dependencies=[Depends(require_reader(UserRole.reviewer_l1))],
+    dependencies=[Depends(require_reader(UserRole.user))],
 )
 
 
@@ -106,6 +106,14 @@ def list_audit_events(
         .outerjoin(Document, Document.id == AuditLog.document_id)
     )
     base = base.where(_scope_filter(ctx, scope_company))
+    if not ctx.is_platform_admin and ctx.user.role == UserRole.user:
+        # Regular users only see events related to cases they submitted or actions they performed
+        base = base.where(
+            or_(
+                Case.submitted_by_user_id == ctx.user.id,
+                AuditLog.actor_user_id == ctx.user.id,
+            )
+        )
     if event_type:
         base = base.where(AuditLog.event_type == event_type)
     if case_id:
@@ -185,4 +193,11 @@ def list_event_types(
         session, scope_company = db, ctx.company_id
     stmt = select(AuditLog.event_type).distinct().order_by(AuditLog.event_type)
     stmt = stmt.where(_scope_filter(ctx, scope_company))
+    if not ctx.is_platform_admin and ctx.user.role == UserRole.user:
+        stmt = stmt.outerjoin(Case, Case.id == AuditLog.case_id).where(
+            or_(
+                Case.submitted_by_user_id == ctx.user.id,
+                AuditLog.actor_user_id == ctx.user.id,
+            )
+        )
     return list(session.execute(stmt).scalars().all())

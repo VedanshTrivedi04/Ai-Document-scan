@@ -155,38 +155,7 @@ class OCRService:
             endpoint=endpoint, credential=AzureKeyCredential(key)
         )
 
-    def analyze_url(self, document_url: str) -> OCRResult:
-        from azure.ai.documentintelligence.models import AnalyzeDocumentRequest, DocumentAnalysisFeature
-        from azure.core.exceptions import AzureError, HttpResponseError
-
-        # Global ceiling across every extraction worker (Azure's default is
-        # 15 analyze TPS) — see app/services/rate_limiter.py.
-        rate_limiter.acquire(
-            rate_limiter.AZURE_DOCUMENT_INTELLIGENCE,
-            settings.azure_document_intelligence_max_calls_per_second,
-            1.0,
-        )
-        try:
-            features = (
-                [DocumentAnalysisFeature.STYLE_FONT] if settings.azure_document_intelligence_style_font else None
-            )
-            poller = self._client.begin_analyze_document(
-                "prebuilt-layout",
-                body=AnalyzeDocumentRequest(url_source=document_url),
-                features=features,
-            )
-            result = poller.result()
-        except HttpResponseError as exc:
-            if exc.status_code == 429:
-                # The SDK already retried with back-off; make every worker
-                # pause rather than each one keep hitting the quota.
-                rate_limiter.report_throttled(
-                    rate_limiter.AZURE_DOCUMENT_INTELLIGENCE, rate_limiter.retry_after_from(exc)
-                )
-            raise OCROperationError(f"Azure Document Intelligence request failed: {exc}") from exc
-        except AzureError as exc:
-            raise OCROperationError(f"Azure Document Intelligence request failed: {exc}") from exc
-
+    def _process_analysis_result(self, result) -> OCRResult:
         tables = [
             OCRTable(
                 row_count=table.row_count,
@@ -215,6 +184,66 @@ class OCRService:
             key_value_pairs=key_value_pairs,
             pages=pages_from_result(result),
         )
+
+    def analyze_bytes(self, content: bytes) -> OCRResult:
+        from azure.ai.documentintelligence.models import AnalyzeDocumentRequest, DocumentAnalysisFeature
+        from azure.core.exceptions import AzureError, HttpResponseError
+
+        rate_limiter.acquire(
+            rate_limiter.AZURE_DOCUMENT_INTELLIGENCE,
+            settings.azure_document_intelligence_max_calls_per_second,
+            1.0,
+        )
+        try:
+            features = (
+                [DocumentAnalysisFeature.STYLE_FONT] if settings.azure_document_intelligence_style_font else None
+            )
+            poller = self._client.begin_analyze_document(
+                "prebuilt-layout",
+                body=AnalyzeDocumentRequest(bytes_source=content),
+                features=features,
+            )
+            result = poller.result()
+        except HttpResponseError as exc:
+            if exc.status_code == 429:
+                rate_limiter.report_throttled(
+                    rate_limiter.AZURE_DOCUMENT_INTELLIGENCE, rate_limiter.retry_after_from(exc)
+                )
+            raise OCROperationError(f"Azure Document Intelligence request failed: {exc}") from exc
+        except AzureError as exc:
+            raise OCROperationError(f"Azure Document Intelligence request failed: {exc}") from exc
+
+        return self._process_analysis_result(result)
+
+    def analyze_url(self, document_url: str) -> OCRResult:
+        from azure.ai.documentintelligence.models import AnalyzeDocumentRequest, DocumentAnalysisFeature
+        from azure.core.exceptions import AzureError, HttpResponseError
+
+        rate_limiter.acquire(
+            rate_limiter.AZURE_DOCUMENT_INTELLIGENCE,
+            settings.azure_document_intelligence_max_calls_per_second,
+            1.0,
+        )
+        try:
+            features = (
+                [DocumentAnalysisFeature.STYLE_FONT] if settings.azure_document_intelligence_style_font else None
+            )
+            poller = self._client.begin_analyze_document(
+                "prebuilt-layout",
+                body=AnalyzeDocumentRequest(url_source=document_url),
+                features=features,
+            )
+            result = poller.result()
+        except HttpResponseError as exc:
+            if exc.status_code == 429:
+                rate_limiter.report_throttled(
+                    rate_limiter.AZURE_DOCUMENT_INTELLIGENCE, rate_limiter.retry_after_from(exc)
+                )
+            raise OCROperationError(f"Azure Document Intelligence request failed: {exc}") from exc
+        except AzureError as exc:
+            raise OCROperationError(f"Azure Document Intelligence request failed: {exc}") from exc
+
+        return self._process_analysis_result(result)
 
 
     def read_image(self, image_bytes: bytes) -> tuple[str, float]:

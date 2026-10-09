@@ -120,10 +120,10 @@ export function AuditHistoryPage() {
           </div>
         )}
         <section>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 mb-1">System Governance &amp; Compliance</p>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-950">Audit History</h1>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600 mb-1">Activity &amp; Governance Log</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-950">Activity &amp; Audit History</h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-3xl">
-            The append-only record of every automated check, reviewer decision and administrative change. Entries are only ever added, never edited or removed.
+            The permanent, append-only record of every case created, document check, pipeline action, decision, and deletion. Entries are preserved in full detail and can never be erased.
           </p>
         </section>
 

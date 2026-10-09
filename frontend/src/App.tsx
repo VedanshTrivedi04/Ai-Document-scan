@@ -75,10 +75,9 @@ function App() {
               <Route path="/family" element={<FamilyPage />} />
               <Route path="/families/:familyId" element={<FamilyPage />} />
 
-              {/* Governance & Audit — company reviewers, and platform admins (per company) */}
-              <Route element={<RoleRoute minRole="reviewer_l1" platformAdmin="allow" label="Reviewer" />}>
-                <Route path="/audit-history" element={<AuditHistoryPage />} />
-              </Route>
+              {/* Governance & Audit History — accessible to users, reviewers and platform admins */}
+              <Route path="/audit-history" element={<AuditHistoryPage />} />
+              <Route path="/history" element={<AuditHistoryPage />} />
 
               {/* Company settings — the company's Reviewer L2s, and platform admins */}
               <Route element={<RoleRoute minRole="reviewer_l2" platformAdmin="allow" label="Reviewer L2" />}>

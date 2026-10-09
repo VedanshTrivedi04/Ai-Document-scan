@@ -43,7 +43,7 @@ const NAV_VISIBLE: Record<NavItemId, (u: CurrentUser | undefined, isOrg: boolean
   cases: (u, isOrg) => Boolean(u?.is_platform_admin) || hasRank(u?.role, "reviewer_l1") || isOrg,
   my_cases: (u) => !u?.is_platform_admin,
   family: (u) => !u?.is_platform_admin,
-  audit_history: (u) => Boolean(u?.is_platform_admin) || hasRank(u?.role, "reviewer_l1"),
+  audit_history: () => true,
   settings: (u) => Boolean(u?.is_platform_admin) || hasRank(u?.role, "reviewer_l2"),
   platform: (u) => Boolean(u?.is_platform_admin),
 }
@@ -133,8 +133,8 @@ export function Nav({ active, onNewUploadClick }: NavProps) {
             </div>
           </Link>
 
-          {/* Desktop Nav links (visible on xl screens >= 1280px) */}
-          <nav aria-label="Main navigation" className="hidden items-center gap-1 xl:flex">
+          {/* Desktop Nav links (visible on md screens >= 768px) */}
+          <nav aria-label="Main navigation" className="hidden items-center gap-1 md:flex">
             {visibleNavItems.map((item) => {
               const isActive = item.id === active
               const Icon = item.icon
@@ -210,22 +210,22 @@ export function Nav({ active, onNewUploadClick }: NavProps) {
             <span>Sign out</span>
           </button>
 
-          {/* Mobile / Tablet Hamburger Toggle (visible < xl) */}
+          {/* Mobile / Tablet Hamburger Toggle (visible < md) */}
           <button
             type="button"
             aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={mobileOpen}
             onClick={() => setMobileOpen((prev) => !prev)}
-            className="flex xl:hidden size-8 sm:size-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 transition active:scale-95"
+            className="flex md:hidden size-8 sm:size-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 transition active:scale-95"
           >
             {mobileOpen ? <XIcon className="size-4" /> : <MenuIcon className="size-4" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile & Tablet Drawer Menu (< xl: 1280px) */}
+      {/* Mobile & Tablet Drawer Menu (< md: 768px) */}
       {mobileOpen && (
-        <div className="xl:hidden mt-2.5 border-t border-slate-200/80 pt-3 pb-2 space-y-3 animate-in slide-in-from-top-2 duration-150">
+        <div className="md:hidden mt-2.5 border-t border-slate-200/80 pt-3 pb-2 space-y-3 animate-in slide-in-from-top-2 duration-150">
           {/* User badge on mobile */}
           {user && (
             <div className="flex items-center justify-between px-2 py-2 rounded-xl bg-slate-50 border border-slate-200/60">

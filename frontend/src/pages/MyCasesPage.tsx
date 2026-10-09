@@ -1,3 +1,5 @@
+import * as React from "react"
+import {
   AlertTriangleIcon,
   CheckCircle2Icon,
   ChevronDownIcon,
@@ -131,6 +133,14 @@ export function MyCasesPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            <button
+              onClick={() => navigate("/history")}
+              className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
+              type="button"
+            >
+              <ClockIcon className="w-3.5 h-3.5 text-blue-600" />
+              Activity history
+            </button>
             <button
               className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
               type="button"

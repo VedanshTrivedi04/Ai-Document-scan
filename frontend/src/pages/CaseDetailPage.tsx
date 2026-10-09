@@ -534,19 +534,26 @@ export function CaseDetailPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
-                        activeDoc.processing_status === "complete"
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : activeDoc.processing_status === "failed"
-                          ? "bg-red-50 text-red-700 border border-red-200"
-                          : "bg-amber-50 text-amber-700 border border-amber-200"
-                      }`}>
-                        {activeDoc.processing_status === "complete"
-                          ? "Processed"
-                          : activeDoc.processing_status === "failed"
-                          ? "Failed"
-                          : "Processing"}
-                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
+                          activeDoc.processing_status === "complete"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : activeDoc.processing_status === "failed"
+                            ? "bg-red-50 text-red-700 border border-red-200"
+                            : "bg-amber-50 text-amber-700 border border-amber-200"
+                        }`}>
+                          {activeDoc.processing_status === "complete"
+                            ? "Processed"
+                            : activeDoc.processing_status === "failed"
+                            ? "Failed"
+                            : "Processing"}
+                        </span>
+                        {activeDoc.processing_status === "failed" && activeDoc.processing_error && (
+                          <span className="text-[11px] text-red-600 bg-red-50/80 px-2 py-0.5 rounded border border-red-200/60 max-w-xs text-right font-medium" title={activeDoc.processing_error}>
+                            {activeDoc.processing_error}
+                          </span>
+                        )}
+                      </div>
                       <a
                         href={activeDoc.file_url}
                         target="_blank"

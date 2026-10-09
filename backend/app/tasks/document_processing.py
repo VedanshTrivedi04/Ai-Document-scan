@@ -174,11 +174,20 @@ def process_document(document_id: str, company_id: str | None = None) -> None:
             )
 
             ocr_service = get_ocr_service()
-            if isinstance(ocr_service, LocalOCRService):
-                # Reads the file itself; nothing outside this machine fetches the URL.
+            if hasattr(ocr_service, "analyze_bytes") and (isinstance(ocr_service, LocalOCRService) or getattr(storage, "is_local", False) or not document_url.startswith("http")):
+                # When using local storage or local OCR, Azure cannot reach localhost URLs. Pass file bytes directly.
+                ocr_result = ocr_service.analyze_bytes(storage.download_bytes(document.blob_storage_path))
+            elif isinstance(ocr_service, LocalOCRService):
                 ocr_result = ocr_service.analyze_bytes(storage.download_bytes(document.blob_storage_path))
             else:
-                ocr_result = ocr_service.analyze_url(document_url)
+                try:
+                    ocr_result = ocr_service.analyze_url(document_url)
+                except Exception:
+                    # Fallback to direct bytes if URL fetch failed (e.g. non-public URL or SAS issue)
+                    if hasattr(ocr_service, "analyze_bytes"):
+                        ocr_result = ocr_service.analyze_bytes(storage.download_bytes(document.blob_storage_path))
+                    else:
+                        raise
             if identity_case:
                 _complete_identity_document(db, document, ocr_result)
                 return

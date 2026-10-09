@@ -44,7 +44,21 @@ def _tesseract_command() -> str | None:
 
 class LocalOCRService:
     def __init__(self, tessdata_dir: str | None, languages: str):
-        self._tessdata = tessdata_dir or os.environ.get("TESSDATA_PREFIX")
+        # Look for tessdata in configured path, TESSDATA_PREFIX env, or standard Linux paths
+        candidates = [
+            tessdata_dir,
+            os.environ.get("TESSDATA_PREFIX"),
+            "/usr/share/tesseract-ocr/5/tessdata",
+            "/usr/share/tesseract-ocr/4.00/tessdata",
+            "/usr/share/tesseract-ocr/tessdata",
+            "/usr/share/tessdata",
+        ]
+        found_dir = None
+        for cand in candidates:
+            if cand and Path(cand).is_dir():
+                found_dir = cand
+                break
+        self._tessdata = found_dir
         self._languages = languages
 
     def _recognise(self, page: pymupdf.Page) -> list[tuple]:
@@ -55,14 +69,20 @@ class LocalOCRService:
                 "This page is a scan or an image and needs Tesseract. Set TESSDATA_DIR in backend/.env "
                 "to the folder holding the .traineddata language files."
             )
-        missing = [
-            language for language in self._languages.split("+")
-            if not (Path(self._tessdata) / f"{language}.traineddata").is_file()
+        available = [
+            lang for lang in self._languages.split("+")
+            if (Path(self._tessdata) / f"{lang}.traineddata").is_file()
         ]
-        if missing:
-            raise OCRConfigurationError(
-                f"TESSDATA_DIR ({self._tessdata}) has no language file for: {', '.join(missing)}."
-            )
+        if not available:
+            # Fall back to any traineddata found in directory
+            all_trained = [f.stem for f in Path(self._tessdata).glob("*.traineddata")]
+            if all_trained:
+                available = [all_trained[0]]
+            else:
+                raise OCRConfigurationError(
+                    f"TESSDATA_DIR ({self._tessdata}) has no .traineddata language files."
+                )
+        active_languages = "+".join(available)
         command = _tesseract_command()
         if command is None:
             raise OCRConfigurationError(
@@ -76,7 +96,7 @@ class LocalOCRService:
             try:
                 done = subprocess.run(
                     [command, str(image), "stdout", "--tessdata-dir", str(Path(self._tessdata).resolve()),
-                     "-l", self._languages, "--psm", "6",
+                     "-l", active_languages, "--psm", "6",
                      # Asked for by setting, not by the "tsv" config file: a
                      # language folder of our own has no configs folder.
                      "-c", "tessedit_create_tsv=1"],
@@ -98,7 +118,15 @@ class LocalOCRService:
 
     def analyze_bytes(self, content: bytes) -> OCRResult:
         try:
-            document = pymupdf.open(stream=content)
+            # If content is a PNG, JPEG or TIFF image, convert to a single-page PDF document in PyMuPDF
+            if content.startswith(b"\x89PNG\r\n\x1a\n"):
+                document = pymupdf.open(stream=content, filetype="png")
+            elif content.startswith(b"\xff\xd8\xff"):
+                document = pymupdf.open(stream=content, filetype="jpeg")
+            elif content.startswith((b"II*\x00", b"MM\x00*")):
+                document = pymupdf.open(stream=content, filetype="tiff")
+            else:
+                document = pymupdf.open(stream=content)
         except Exception as exc:  # noqa: BLE001
             raise OCROperationError(f"The file could not be opened for reading: {exc}") from exc
         pages: list[OCRPage] = []
