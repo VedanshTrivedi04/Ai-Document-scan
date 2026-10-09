@@ -12,9 +12,13 @@ export function uploadBulkZip(
   caseType: CaseType,
   token: string,
   onProgress?: (percent: number) => void,
+  verificationMode?: string,
 ): Promise<BulkUploadDetail> {
   return new Promise((resolve, reject) => {
     const params = new URLSearchParams({ case_type: caseType, filename: file.name })
+    if (verificationMode) {
+      params.set("verification_mode", verificationMode)
+    }
     const xhr = new XMLHttpRequest()
     xhr.open("POST", `${API_BASE_URL}/bulk-uploads?${params}`)
     xhr.setRequestHeader("Authorization", `Bearer ${token}`)

@@ -40,6 +40,26 @@ export interface BulkUploadCase {
   flag: CaseFlag | null
 }
 
+export type VerificationMode = "cross_document" | "document_forensics" | "both"
+
+export const VERIFICATION_MODE_LABELS: Record<VerificationMode, { title: string; subtitle: string; short: string }> = {
+  cross_document: {
+    title: "Cross-Document Contradiction Detector",
+    subtitle: "Compare person documents (Aadhaar, PAN, Voter, Income, etc.) to detect name variants, DoB conflicts, address differences, and transliterations.",
+    short: "Cross-document",
+  },
+  document_forensics: {
+    title: "Document Forensics & Authenticity",
+    subtitle: "Examine individual ID documents for tampering, metadata forgery, font inconsistency, and digital alterations.",
+    short: "Document forensics",
+  },
+  both: {
+    title: "Both (Full 360° Inspection)",
+    subtitle: "Comprehensive analysis: deep forensic tampering checks on each document AND cross-document contradiction detection.",
+    short: "Full 360° check",
+  },
+}
+
 export interface BulkUploadSummary {
   id: string
   original_filename: string
@@ -57,6 +77,7 @@ export interface BulkUploadSummary {
   created_at: string
   started_at: string | null
   finished_at: string | null
+  verification_mode?: VerificationMode | string | null
 }
 
 export type BulkUploadProgress = Record<BulkCaseLiveStatus, number>
@@ -70,4 +91,5 @@ export interface BulkUploadDetail extends BulkUploadSummary {
   /** Nothing on the screen can change any more; stop polling. */
   settled: boolean
   cases: BulkUploadCase[]
+  verification_mode?: VerificationMode | string | null
 }

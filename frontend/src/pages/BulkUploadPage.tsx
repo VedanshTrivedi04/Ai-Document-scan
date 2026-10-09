@@ -1,6 +1,18 @@
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
-import { AlertTriangleIcon, FileArchiveIcon, FolderIcon, UploadCloudIcon, XIcon } from "lucide-react"
+import {
+  AlertTriangleIcon,
+  CheckCircle2Icon,
+  FileArchiveIcon,
+  FileTextIcon,
+  FolderIcon,
+  LayersIcon,
+  ShieldAlertIcon,
+  SparklesIcon,
+  UploadCloudIcon,
+  UsersIcon,
+  XIcon,
+} from "lucide-react"
 import { Link, useNavigate } from "react-router-dom"
 
 import { listBulkUploads, uploadBulkZip } from "@/api/bulkUploads"
@@ -22,7 +34,7 @@ import {
 } from "@/lib/uploadLimits"
 import { useUploadLimits } from "@/hooks/useUploadLimits"
 import { cn } from "@/lib/utils"
-import { BULK_STATUS_LABELS } from "@/types/bulkUpload"
+import { BULK_STATUS_LABELS, type VerificationMode } from "@/types/bulkUpload"
 import { CASE_TYPE_LABELS, CASE_TYPES, type CaseType } from "@/types/case"
 
 export function BulkUploadPage() {
@@ -33,7 +45,9 @@ export function BulkUploadPage() {
   const limits = useUploadLimits()
   const inputRef = React.useRef<HTMLInputElement>(null)
 
-  const [caseType, setCaseType] = React.useState<CaseType>("vendor_invoice")
+  const [domain, setDomain] = React.useState<"person" | "business">("person")
+  const [verificationMode, setVerificationMode] = React.useState<VerificationMode>("cross_document")
+  const [caseType, setCaseType] = React.useState<CaseType>("identity_verification")
   const [file, setFile] = React.useState<File | null>(null)
   const [estimate, setEstimate] = React.useState<number | null>(null)
   const [problem, setProblem] = React.useState<string | null>(null)
@@ -65,7 +79,8 @@ export function BulkUploadPage() {
     setProblem(null)
     setProgress(0)
     try {
-      const created = await uploadBulkZip(file, caseType, token, setProgress)
+      const modeToSend = domain === "person" ? verificationMode : undefined
+      const created = await uploadBulkZip(file, caseType, token, setProgress, modeToSend)
       navigate(`/bulk-uploads/${created.id}`)
     } catch (err) {
       setProblem(err instanceof ApiError ? err.message : "Upload failed")
@@ -105,28 +120,222 @@ export function BulkUploadPage() {
                 results start appearing within seconds.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-5">
+            <CardContent className="flex flex-col gap-6">
               {!canUpload ? (
                 <p className="text-sm text-muted-foreground">
                   Platform admins have read-only access and can't submit cases.
                 </p>
               ) : (
                 <>
+                  {/* Intake category switcher */}
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="bulkCaseType">Case type (applies to every case in the zip)</Label>
-                    <Select value={caseType} onValueChange={(v) => setCaseType(v as CaseType)} disabled={uploading}>
-                      <SelectTrigger id="bulkCaseType">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CASE_TYPES.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {CASE_TYPE_LABELS[type]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Target Document Category
+                    </Label>
+                    <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/40 p-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDomain("person")
+                          setCaseType("identity_verification")
+                        }}
+                        className={cn(
+                          "flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition-all sm:text-sm",
+                          domain === "person"
+                            ? "bg-card text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        <UsersIcon className="size-4 text-accent" />
+                        Person Documents (Pragati02)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDomain("business")
+                          setCaseType("vendor_invoice")
+                        }}
+                        className={cn(
+                          "flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition-all sm:text-sm",
+                          domain === "business"
+                            ? "bg-card text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        <FileTextIcon className="size-4 text-muted-foreground" />
+                        Business Invoices & Claims
+                      </button>
+                    </div>
                   </div>
+
+                  {/* If Person Documents selected: 3 Verification Mode Cards */}
+                  {domain === "person" ? (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Verification Mode (किस प्रकार की जांच करनी है?)
+                        </Label>
+                        <span className="text-xs text-muted-foreground">Choose one</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                        {/* Option 1: Cross-Document */}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setVerificationMode("cross_document")}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") setVerificationMode("cross_document")
+                          }}
+                          className={cn(
+                            "relative flex cursor-pointer flex-col justify-between rounded-xl border p-3.5 transition-all text-left",
+                            verificationMode === "cross_document"
+                              ? "border-accent bg-accent/5 ring-2 ring-accent/20"
+                              : "border-border bg-card hover:border-accent/40 hover:bg-muted/20",
+                          )}
+                        >
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex size-7 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                                <LayersIcon className="size-4" />
+                              </div>
+                              {verificationMode === "cross_document" && (
+                                <CheckCircle2Icon className="size-4 text-accent" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-foreground">Cross-Document Check</p>
+                              <span className="mt-0.5 inline-block rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                                Contradiction Detector
+                              </span>
+                            </div>
+                            <p className="text-[11px] leading-relaxed text-muted-foreground">
+                              Aadhaar, PAN, Voter ID ke beech spelling variants, DoB typo aur mismatch check.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Option 2: Document Forensics */}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setVerificationMode("document_forensics")}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") setVerificationMode("document_forensics")
+                          }}
+                          className={cn(
+                            "relative flex cursor-pointer flex-col justify-between rounded-xl border p-3.5 transition-all text-left",
+                            verificationMode === "document_forensics"
+                              ? "border-accent bg-accent/5 ring-2 ring-accent/20"
+                              : "border-border bg-card hover:border-accent/40 hover:bg-muted/20",
+                          )}
+                        >
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex size-7 items-center justify-center rounded-lg bg-warning/10 text-warning">
+                                <ShieldAlertIcon className="size-4" />
+                              </div>
+                              {verificationMode === "document_forensics" && (
+                                <CheckCircle2Icon className="size-4 text-accent" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-foreground">Person Document Check</p>
+                              <span className="mt-0.5 inline-block rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                                Tampering & Forensics
+                              </span>
+                            </div>
+                            <p className="text-[11px] leading-relaxed text-muted-foreground">
+                              Individual documents me Photoshop tampering, metadata alterations aur fake PDF scan.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Option 3: Both */}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setVerificationMode("both")}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") setVerificationMode("both")
+                          }}
+                          className={cn(
+                            "relative flex cursor-pointer flex-col justify-between rounded-xl border p-3.5 transition-all text-left",
+                            verificationMode === "both"
+                              ? "border-accent bg-accent/5 ring-2 ring-accent/20"
+                              : "border-border bg-card hover:border-accent/40 hover:bg-muted/20",
+                          )}
+                        >
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex size-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                                <SparklesIcon className="size-4" />
+                              </div>
+                              {verificationMode === "both" && (
+                                <CheckCircle2Icon className="size-4 text-accent" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-foreground">Both (Dono Checks)</p>
+                              <span className="mt-0.5 inline-block rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                                Full 360° Inspection
+                              </span>
+                            </div>
+                            <p className="text-[11px] leading-relaxed text-muted-foreground">
+                              Cross-document contradiction comparison + individual card forensic analysis dono ek saath.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Optional bundle type dropdown for person */}
+                      <div className="mt-1 flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">Specific Bundle Type:</span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCaseType("identity_verification")}
+                            className={cn(
+                              "rounded-md px-2 py-1 text-xs transition-colors",
+                              caseType === "identity_verification"
+                                ? "bg-accent/15 font-semibold text-accent"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            Citizen Identity
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCaseType("hiring_verification")}
+                            className={cn(
+                              "rounded-md px-2 py-1 text-xs transition-colors",
+                              caseType === "hiring_verification"
+                                ? "bg-accent/15 font-semibold text-accent"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            Hiring Candidate
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="bulkCaseType">Case type (applies to every case in the zip)</Label>
+                      <Select value={caseType} onValueChange={(v) => setCaseType(v as CaseType)} disabled={uploading}>
+                        <SelectTrigger id="bulkCaseType">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CASE_TYPES.filter((t) => t !== "identity_verification" && t !== "hiring_verification").map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {CASE_TYPE_LABELS[type]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-2">
                     <Label>Zip file</Label>

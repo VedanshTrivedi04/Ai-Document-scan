@@ -73,6 +73,7 @@ class BulkUploadSummary(BaseModel):
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    verification_mode: str | None = None
 
 
 class BulkUploadDetail(BulkUploadSummary):
@@ -81,6 +82,7 @@ class BulkUploadDetail(BulkUploadSummary):
     ignored_entry_count: int = 0
     warnings: list[str] = []
     progress: BulkUploadProgress
+    verification_mode: str | None = None
     # True once nothing on the screen can change any more: ingestion is over
     # and every created case is done (or decided). The frontend stops
     # polling then.

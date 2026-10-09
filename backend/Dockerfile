@@ -14,7 +14,7 @@ ENV TESSDATA_DIR=/usr/share/tesseract-ocr/5/tessdata
 
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --default-timeout=1000 --retries 10 -r requirements.txt
 
 COPY alembic.ini seed.py start-api.sh start-worker.sh start-beat.sh ./
 # A Windows checkout gives these scripts CRLF line endings, which sh rejects.

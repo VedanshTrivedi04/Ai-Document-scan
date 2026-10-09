@@ -54,6 +54,14 @@ _TERMINAL_STATUSES = (DocumentProcessingStatus.complete, DocumentProcessingStatu
 def _maybe_enqueue_cross_document_check(
     db: Session, company_id: uuid.UUID, case_id: uuid.UUID
 ) -> None:
+    from app.models.bulk_upload import BulkUpload
+
+    case = db.get(Case, case_id)
+    if case and case.bulk_upload_id:
+        bulk = db.get(BulkUpload, case.bulk_upload_id)
+        if bulk and (bulk.zip_details or {}).get("verification_mode") == "document_forensics":
+            return
+
     statuses = db.execute(
         select(Document.processing_status).where(
             Document.case_id == case_id, Document.company_id == company_id

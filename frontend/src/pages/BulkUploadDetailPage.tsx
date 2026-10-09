@@ -15,7 +15,13 @@ import { useActingCompany } from "@/hooks/useActingCompany"
 import { useAuth } from "@/hooks/useAuth"
 import { formatFileSize } from "@/lib/uploadLimits"
 import { cn } from "@/lib/utils"
-import { BULK_STATUS_LABELS, type BulkCaseLiveStatus, type BulkUploadCase } from "@/types/bulkUpload"
+import {
+  BULK_STATUS_LABELS,
+  type BulkCaseLiveStatus,
+  type BulkUploadCase,
+  type VerificationMode,
+  VERIFICATION_MODE_LABELS,
+} from "@/types/bulkUpload"
 import { CASE_TYPE_LABELS } from "@/types/case"
 
 const LIVE_LABELS: Record<BulkCaseLiveStatus, string> = {
@@ -92,11 +98,18 @@ export function BulkUploadDetailPage() {
           eyebrow="Bulk upload"
           title={<span className="break-all">{data.original_filename}</span>}
           description={
-            <>
-              {CASE_TYPE_LABELS[data.case_type]} · {formatFileSize(data.zip_size_bytes)} · uploaded{" "}
-              {new Date(data.created_at).toLocaleString()}
-              {data.uploaded_by && ` by ${data.uploaded_by.full_name || data.uploaded_by.email}`}
-            </>
+            <div className="flex flex-wrap items-center gap-2">
+              <span>
+                {CASE_TYPE_LABELS[data.case_type]} · {formatFileSize(data.zip_size_bytes)} · uploaded{" "}
+                {new Date(data.created_at).toLocaleString()}
+                {data.uploaded_by && ` by ${data.uploaded_by.full_name || data.uploaded_by.email}`}
+              </span>
+              {data.verification_mode && VERIFICATION_MODE_LABELS[data.verification_mode as VerificationMode] && (
+                <Badge variant="secondary" className="border border-accent/30 bg-accent/10 font-semibold text-accent">
+                  {VERIFICATION_MODE_LABELS[data.verification_mode as VerificationMode].title}
+                </Badge>
+              )}
+            </div>
           }
           actions={
             <div className="flex gap-2">

@@ -107,6 +107,10 @@ async def create_bulk_upload(
     request: Request,
     case_type: CaseType = Query(..., description="Case type for every case in the zip."),
     filename: str = Query(..., min_length=1, max_length=512, description="The zip's file name."),
+    verification_mode: str = Query(
+        "cross_document",
+        description="Verification mode for person bundles: cross_document, document_forensics, or both.",
+    ),
     current_user: User = Depends(require_company_role(UserRole.user)),
     db: Session = Depends(get_tenant_db),
     storage: StorageService = Depends(get_storage_service),
@@ -152,6 +156,9 @@ async def create_bulk_upload(
         except StorageOperationError as exc:
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
+    details = {k: v for k, v in inspection.plan.items() if k != "cases"}
+    details["verification_mode"] = verification_mode
+
     bulk = BulkUpload(
         id=bulk_id,
         company_id=company_id,
@@ -167,7 +174,7 @@ async def create_bulk_upload(
         documents_rejected=sum(
             1 for c in inspection.plan["cases"] for f in c["files"] if f["status"] == "rejected"
         ),
-        zip_details={k: v for k, v in inspection.plan.items() if k != "cases"},
+        zip_details=details,
     )
     db.add(bulk)
     db.flush()
@@ -182,6 +189,7 @@ async def create_bulk_upload(
             "file_hash": file_hash,
             "zip_size_bytes": size,
             "case_folder_count": inspection.case_folder_count,
+            "verification_mode": verification_mode,
         },
     )
     record_bulk_zip_stored(db, company_id, size)
@@ -269,6 +277,7 @@ def _summary(bulk: BulkUpload, uploader: User | None) -> BulkUploadSummary:
         created_at=bulk.created_at,
         started_at=bulk.started_at,
         finished_at=bulk.finished_at,
+        verification_mode=(bulk.zip_details or {}).get("verification_mode"),
     )
 
 

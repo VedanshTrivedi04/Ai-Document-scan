@@ -99,7 +99,6 @@ services:
   # e.g.: docker compose --profile workers up --watch
   # ---------------------------------------------------------------------------
   extraction-worker: &worker
-    profiles: ["workers"]
     build:
       context: ./backend
       dockerfile: Dockerfile

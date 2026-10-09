@@ -231,7 +231,9 @@ def _unwrap(entries: list[_Entry]) -> tuple[list[_Entry], str | None]:
     if not files:
         return entries, None
     tops = {e.parts[0] for e in files}
-    if len(tops) != 1 or any(len(e.parts) < 3 for e in files):
+    if len(tops) != 1:
+        return entries, None
+    if not any(len(e.parts) >= 3 for e in files):
         return entries, None
     wrapper = next(iter(tops))
     stripped = [
@@ -516,7 +518,11 @@ def ingest(
     if enqueue is None:
         enqueue = enqueue_document_pipeline
         if is_identity_case_type(bulk.case_type):
-            enqueue = partial(enqueue_document_pipeline, forensics=False)
+            mode = (bulk.zip_details or {}).get("verification_mode", "cross_document")
+            if mode == "cross_document":
+                enqueue = partial(enqueue_document_pipeline, forensics=False)
+            else:
+                enqueue = partial(enqueue_document_pipeline, forensics=True)
     bulk.status = BulkUploadStatus.ingesting
     bulk.started_at = bulk.started_at or utcnow()
     pending_ids = db.execute(
