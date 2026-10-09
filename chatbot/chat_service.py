@@ -11,6 +11,7 @@ Features:
 import logging
 import os
 from pathlib import Path
+import re
 from typing import Dict, Any, List, Optional
 import httpx
 from dotenv import load_dotenv
@@ -54,12 +55,61 @@ STRICT ANTI-HALLUCINATION RULES:
    - Income gap: Obtain an updated valid certificate from the Tehsildar / Revenue office.
 5. For harmless variants (e.g. Choudhary vs Chowdhary, initials, address formatting), reassure the citizen that their application will not be rejected.
 6. Tone: Highly polite, helpful, clear, and reassuring.
+
+TELEGRAM UI & FORMATTING RULES (CRITICAL):
+1. NEVER USE MARKDOWN TABLES: Do NOT output `| col | col |` tables! Telegram mobile UI does NOT render tables and line wraps make them look completely broken and ugly. Instead, format data using clean bullet points:
+   • Document 1 (Aadhaar): Name, DOB, ID
+   • Document 2 (PAN): Name, DOB, ID
+2. NO MARKDOWN HEADERS (# or ###): Telegram does NOT render markdown heading syntax. Always use `*Bold Text*` or `📌 *Heading*` instead.
+3. Use clean spacing and friendly emojis (•, 👉, ✅, ⚠️, 🔍, 🛠️).
+4. CONVERSATIONAL MEMORY: Remember past conversation turns. If the user asks follow-up questions (e.g. "In hinglish", "aur explain karo", "isko kaise theek karein?"), reply seamlessly within context.
 """
 
-async def ask_sarthi_assistant(user_message: str, session_context: Dict[str, Any]) -> str:
+
+def clean_telegram_formatting(text: str) -> str:
+    """Post-processes LLM output to convert any markdown tables and ### headers into clean Telegram formatting."""
+    # Convert ### headers to bold
+    cleaned = re.sub(r"^#{1,6}\s*(.+)$", r"📌 *\1*", text, flags=re.MULTILINE)
+
+    # Convert markdown tables (| a | b |) to clean bullet lists
+    lines = cleaned.split("\n")
+    out_lines = []
+    in_table = False
+    table_headers: List[str] = []
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("|") and stripped.endswith("|"):
+            parts = [p.strip() for p in stripped.strip("|").split("|")]
+            # Skip separator line like |---|---|
+            if all(set(p).issubset({"-", ":", " "}) for p in parts if p):
+                continue
+            if not in_table:
+                in_table = True
+                table_headers = parts
+            else:
+                row_items = []
+                for idx, cell in enumerate(parts):
+                    h_name = table_headers[idx] if idx < len(table_headers) else f"Field {idx+1}"
+                    if cell and cell != "-":
+                        row_items.append(f"*{h_name}:* {cell}")
+                if row_items:
+                    out_lines.append("• " + " | ".join(row_items))
+        else:
+            in_table = False
+            out_lines.append(line)
+
+    return "\n".join(out_lines).strip()
+
+
+async def ask_sarthi_assistant(
+    user_message: str,
+    session_context: Dict[str, Any],
+    history: Optional[List[Dict[str, str]]] = None,
+) -> str:
     """
-    Takes the citizen's free-form chat message and generates a grounded, empathetic
-    answer using Groq LLM based on actual backend verification data.
+    Takes citizen's free-form chat message, maintains multi-turn conversation memory,
+    and generates grounded, empathetic answers using Groq LLM with clean Telegram formatting.
     """
     if not GROQ_API_KEY:
         return (
@@ -71,9 +121,17 @@ async def ask_sarthi_assistant(user_message: str, session_context: Dict[str, Any
     grounded_context = _build_grounded_context(session_context)
 
     messages = [
-        {"role": "system", "content": SYSTEM_PERSONA + "\n\n" + grounded_context},
-        {"role": "user", "content": user_message.strip()}
+        {"role": "system", "content": SYSTEM_PERSONA + "\n\n" + grounded_context}
     ]
+
+    # Conversation Memory: Append recent conversation turns
+    hist = history or session_context.get("history", [])
+    if hist:
+        for turn in hist[-8:]:
+            if turn.get("role") in ("user", "assistant") and turn.get("content"):
+                messages.append({"role": turn["role"], "content": turn["content"]})
+
+    messages.append({"role": "user", "content": user_message.strip()})
 
     # Try each available model on Groq with failover
     for model_name in GROQ_MODELS:
@@ -94,7 +152,7 @@ async def ask_sarthi_assistant(user_message: str, session_context: Dict[str, Any
                 data = resp.json()
                 content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
                 if content:
-                    return content
+                    return clean_telegram_formatting(content)
             elif resp.status_code == 429:
                 logger.warning(f"Groq model {model_name} rate-limited (429), trying fallback model...")
                 continue

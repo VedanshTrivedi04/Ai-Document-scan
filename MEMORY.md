@@ -1887,8 +1887,48 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Commit: Documented in memory.
-- Status: Clean.
+- Commit: `d11d0ea` (`docs: document telegram bot 409 conflict resolution`)
+- Push: Successful (`origin/feat/telegram-chatbot`)
+- Status: Complete
+
+---
+
+### 2026-10-09 17:15
+
+**User Request**
+> "alright , theek se kam kar raha hai bas fromat or theek kar do ad memory bhi hona chaiye like usko apni past conversection yad ho" (with screenshot of Telegram chat showing raw markdown table `|---|` and `###` header)
+
+**Exploration**
+- Inspected Telegram message rendering:
+  - Telegram's mobile chat UI does not support markdown table syntax (`|---|---|`) or markdown headings (`###`), rendering them as raw, broken text blocks with ugly line wraps.
+  - Previous `ask_sarthi_assistant` only sent single-turn queries `[{"role": "system", ...}, {"role": "user", ...}]` without passing past conversational turns, causing the bot to lose context when users ask follow-up questions like "In hinglish".
+
+**Work Done**
+- `chatbot/chat_service.py`:
+  - Enforced strict Telegram mobile UI rules in `SYSTEM_PERSONA`: prohibits markdown tables (`|---|`) and markdown headers (`###`), requiring bold bullet points, emojis (`•`, `📌`, `🛠️`), and clean paragraph spacing.
+  - Implemented `clean_telegram_formatting()` post-processor that intercepts any markdown tables or `###` headings and transforms them into clean bulleted layouts.
+  - Added multi-turn conversation memory: `ask_sarthi_assistant` now accepts `history` parameter and feeds previous user/assistant dialogue turns into Groq context window.
+  - Fixed `import re` in `chat_service.py`.
+- `chatbot/bot.py`:
+  - `handle_chat_message`: maintains `chat_history` per session in `context.user_data`, appending user questions and assistant answers with a sliding window of up to 12 turns.
+  - Resets `chat_history` on `/start` and `/cancel` for clean session re-initialization.
+
+**Files Changed**
+- `chatbot/chat_service.py`: Added Telegram format cleaning rules, post-processor, and multi-turn history support.
+- `chatbot/bot.py`: Maintained sliding conversation memory in session context.
+- `memory.md`: Documented interaction log and feature enhancements.
+
+**Verification**
+- Compiled all chatbot modules with `py_compile` (0 errors).
+- Executed multi-turn test simulating follow-up "In hinglish":
+  - Confirmed 0 raw markdown tables (`|---|`) and 0 `###` headings in output.
+  - Output converted to clean bullet points with bold headers (`📌`, `•`, `🛠️`).
+  - Bot remembered preceding conversation context seamlessly.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Status: Staged and committed.
+
 
 
 

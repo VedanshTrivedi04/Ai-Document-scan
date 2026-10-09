@@ -64,6 +64,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user = update.effective_user
     context.user_data["doc_paths"] = []
     context.user_data["quality_warnings"] = []
+    context.user_data["chat_history"] = []
     
     pending = context.user_data.get("debounce_task")
     if pending and not pending.done():
@@ -427,15 +428,21 @@ async def handle_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception:
         pass
 
+    chat_history = context.user_data.setdefault("chat_history", [])
     session_context = {
         "doc_paths": context.user_data.get("doc_paths", []),
         "extracted_docs": context.user_data.get("extracted_docs", []),
         "last_result": context.user_data.get("last_result", {}),
         "quality_warnings": context.user_data.get("quality_warnings", []),
+        "history": chat_history,
     }
 
     try:
-        reply = await ask_sarthi_assistant(text, session_context)
+        reply = await ask_sarthi_assistant(text, session_context, history=chat_history)
+        chat_history.append({"role": "user", "content": text})
+        chat_history.append({"role": "assistant", "content": reply})
+        if len(chat_history) > 12:
+            context.user_data["chat_history"] = chat_history[-12:]
         await _safe_reply(update, reply)
     except Exception as e:
         logger.error(f"Error handling chat message: {e}", exc_info=True)
