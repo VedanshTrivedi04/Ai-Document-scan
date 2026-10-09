@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 # State & Constants
 COLLECTING_DOCS = 1
-VERIFY_BUTTON_TEXT = "🔍 Jaanch Shuru Karein (Verify Bundle)"
+VERIFY_BUTTON_TEXT = "🔍 Verify Bundle (Jaanch Shuru Karein)"
 MAX_DOCS = 5
 ALBUM_DEBOUNCE_SECONDS = 1.5
 
@@ -70,19 +70,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         pending.cancel()
 
     welcome_text = (
-        f"🙏 *Namaste {user.first_name} ji!*\n\n"
-        "Main hoon *Sarthi AI* — aapka Citizen Document Verification Assistant.\n\n"
-        "Sarkari form (PM Awas, Scholarship, Ration Card, etc.) bharne se pehle "
-        "apne dastavejon ke *Bundle (2 se 5 documents)* ki aapas me jaanch karwayein taaki form reject na ho.\n\n"
+        f"🙏 *Welcome {user.first_name}!* \n\n"
+        "I am *Sarthi AI* — your Citizen Document Verification Assistant.\n\n"
+        "Before submitting government welfare scheme forms (PM Awas, Scholarship, PM Kisan, Ration Card), "
+        "verify your *Document Bundle (2 to 5 documents)* to catch conflicting details and avoid rejection.\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "📄 *Dastavej Bhejiye:*\n"
-        "Aap ek-ek karke ya *ek sath select karke photos/PDFs* bhej sakte hain:\n"
+        "📄 *Upload Documents:*\n"
+        "Send photos or PDFs one-by-one or in a batch:\n"
         "• Aadhaar Card\n"
         "• PAN Card\n"
         "• Income Certificate\n"
         "• Ration Card / Voter ID / Address Proof\n\n"
         "💡 *Test Demo Bundles:* `/demo T01`, `/demo T05`, `/demo B07`\n"
-        "ℹ️ *Commands:* `/help`, `/scheme`, `/profile`"
+        "🌐 *Multi-lingual AI:* You can talk to me in *English, Hindi (हिन्दी), Gujarati (ગુજરાતી), Marathi (मराठी)* or any native language!"
     )
 
     await update.message.reply_text(
@@ -196,10 +196,10 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
 
     if count >= MAX_DOCS:
         await update.message.reply_text(
-            f"✅ *Sabhi {MAX_DOCS} dastavej prapt aur scan ho gaye!*\n\n"
+            f"✅ *All {MAX_DOCS} documents received & scanned!*\n\n"
             f"{docs_preview_text}"
             f"{quality_banner}\n\n"
-            "⏳ *Cross-document contradiction jaanch shuru ki ja rahi hai...*",
+            "⏳ *Running cross-document contradiction check...*",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=ReplyKeyboardRemove(),
         )
@@ -210,23 +210,22 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
         keyboard = [[VERIFY_BUTTON_TEXT]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
         msg = (
-            f"✅ *Kul {count} Dastavej Prapt Aur Scan Ho Gaye!*\n\n"
+            f"✅ *Received & Scanned {count} Documents!*\n\n"
             f"{docs_preview_text}"
             f"{quality_banner}\n\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"📊 Bundle: *{count}/{MAX_DOCS} documents*\n\n"
-            "👉 Aap chahein toh aur bhi documents bhej sakte hain,\n"
-            f"YA neeche diye gaye *'{VERIFY_BUTTON_TEXT}'* button par click karke abhi aapas me jaanch shuru karein!"
+            "👉 You can send more documents,\n"
+            f"OR click *'{VERIFY_BUTTON_TEXT}'* below to run cross-document check!"
         )
     else:
         reply_markup = ReplyKeyboardRemove()
         msg = (
-            f"✅ *Pehla Dastavej Prapt Aur Scan Ho Gaya!*\n\n"
+            f"✅ *First Document Received & Scanned!*\n\n"
             f"{docs_preview_text}"
             f"{quality_banner}\n\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
-            "📄 Kripya doosra dastavej (jaise PAN Card ya Income Certificate) bhejiye "
-            "taaki cross-verification kiya ja sake."
+            "📄 Please send the 2nd document (e.g. PAN Card or Income Certificate) to cross-verify."
         )
 
     await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
@@ -422,7 +421,7 @@ def main():
         entry_points=[CommandHandler("start", start_command)],
         states={
             COLLECTING_DOCS: [
-                MessageHandler(filters.Regex(f"^{VERIFY_BUTTON_TEXT}$"), handle_verify_request),
+                MessageHandler(filters.Regex(r"(?i)(verify|jaanch)"), handle_verify_request),
                 CommandHandler("done", handle_verify_request),
                 MessageHandler(filters.PHOTO | filters.Document.ALL, handle_document_upload),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_chat_message),

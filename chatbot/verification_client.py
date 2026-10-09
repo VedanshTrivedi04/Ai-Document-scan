@@ -568,17 +568,17 @@ def get_document_preview_summary(bundle_doc: BundleDocument, index: int = 1) -> 
     parent = fields.get("parent_or_spouse_name", {}).get("value") or ""
 
     lines = [
-        f"📄 *Dastavej {index}: {type_label}*",
-        f"   👤 *Naam:* `{name}`",
+        f"📄 *Document {index}: {type_label}*",
+        f"   👤 *Name:* `{name}`",
     ]
     if dob != "-":
-        lines.append(f"   📅 *DOB:* `{dob}`")
+        lines.append(f"   📅 *Date of Birth (DOB):* `{dob}`")
     if parent:
-        lines.append(f"   👪 *Pita/Pati:* `{parent}`")
+        lines.append(f"   👪 *Parent / Spouse:* `{parent}`")
     if gender:
-        lines.append(f"   ⚧ *Ling (Gender):* `{gender}`")
+        lines.append(f"   ⚧ *Gender:* `{gender}`")
     if num != "-":
-        lines.append(f"   🆔 *ID No.:* `{num}`")
+        lines.append(f"   🆔 *ID Number:* `{num}`")
 
     return "\n".join(lines)
 

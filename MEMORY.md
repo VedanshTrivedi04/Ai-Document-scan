@@ -1372,8 +1372,42 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `feat/telegram-chatbot`
-- Commit: `a73986f` (`feat: integrate grounded Groq conversational assistant for natural citizen queries`)
-- Push: Successful (`origin/feat/telegram-chatbot`)
+---
+
+### 2026-10-09 13:28
+
+**User Request**
+> "by default vo english me rahe then fir user agar isi or native langauage me bole to fir vo usko us langauage me bat karre like real ai chatboat"
+
+**Exploration**
+- Inspected `chatbot/chat_service.py`, `chatbot/bot.py`, and `chatbot/verification_client.py`.
+- Formulated dynamic language adaptation policy: Default to English, and mirror the citizen's language when addressed in Hindi, Hinglish, Marathi, Gujarati, Bengali, Tamil, Telugu, etc.
+- Tested Groq `openai/gpt-oss-20b` with queries in English, Hinglish, Gujarati, and Marathi, confirming accurate zero-shot language mirroring.
+
+**Work Done**
+- Updated `chatbot/chat_service.py`:
+  - Updated `SYSTEM_PERSONA` to set English as the default communication language.
+  - Added strict dynamic language mirroring instructions: automatically detect the user's language/script and answer in that exact same native language (Hindi, Hinglish, Marathi, Gujarati, Bengali, Tamil, etc.).
+- Updated `chatbot/bot.py`:
+  - Configured `start_command` welcome message to be in English by default with multi-lingual guidance.
+  - Made upload summaries and verification button English-first with bilingual regex support (`verify` or `jaanch`).
+- Updated `chatbot/verification_client.py`:
+  - Formatted document preview card labels to English-first.
+
+**Files Changed**
+- `chatbot/chat_service.py`: English default & dynamic language mirroring persona.
+- `chatbot/bot.py`: English-first intake messages and welcome guide.
+- `chatbot/verification_client.py`: English-first preview card labels.
+- `memory.md`: Updated interaction history.
+
+**Verification**
+- Tested Groq chat service across English ("What is the error in my documents?"), Hinglish ("Mere documents me kya dikkat hai?"), and Gujarati ("મારા ડોક્યુમેન્ટ્સમાં શું પ્રોબ્લેમ છે?"). All returned fluent, grounded, matching responses.
+- Verified all chatbot modules import cleanly under Python 3.14.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Status: Staged and committed.
+
 
 
 
