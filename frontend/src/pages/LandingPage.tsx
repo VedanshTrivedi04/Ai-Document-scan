@@ -308,33 +308,57 @@ const CinematicScroll = () => {
              <img src="/aadhar.png" alt="Aadhar Document" className="w-full h-full object-cover" />
           </div>
           
-          <div className="s2-card s2-main w-full max-w-xl bg-white rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] border border-gray-100 p-10 z-40 opacity-0 relative overflow-hidden flex flex-col">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-500" />
-            <div className="flex justify-between items-start mb-10">
+          <div className="s2-card s2-main w-full max-w-xl bg-white rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] border border-gray-100 p-8 z-40 opacity-0 relative overflow-hidden flex flex-col font-sans">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+            
+            <div className="flex justify-between items-start mb-8">
               <div>
-                <div className="w-32 h-5 bg-gray-800 rounded mb-3" />
-                <div className="w-48 h-2 bg-gray-300 rounded" />
+                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-blue-500" />
+                  Authentication Report
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">ID: #DOC-8492-X</p>
               </div>
               <div className="flex gap-2">
-                <div className="w-16 h-6 bg-blue-50 rounded-full border border-blue-100" />
-                <div className="w-16 h-6 bg-purple-50 rounded-full border border-purple-100" />
+                <span className="px-3 py-1 bg-green-50 text-green-700 text-xs font-bold uppercase tracking-wider rounded-full border border-green-200">Verified</span>
+                <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold uppercase tracking-wider rounded-full border border-blue-200">High Trust</span>
               </div>
             </div>
             
-            <div className="flex gap-8 mb-8">
+            <div className="flex gap-6 mb-8">
               <div className="flex-1 space-y-4">
-                <div className="w-full h-3 bg-gray-100 rounded-full" />
-                <div className="w-full h-3 bg-gray-100 rounded-full" />
-                <div className="w-4/6 h-3 bg-gray-100 rounded-full" />
+                <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+                  <span className="text-sm text-gray-500">Document Type</span>
+                  <span className="text-sm font-semibold text-gray-900">Identity Card</span>
+                </div>
+                <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+                  <span className="text-sm text-gray-500">Issuer</span>
+                  <span className="text-sm font-semibold text-gray-900">Gov. Authority</span>
+                </div>
+                <div className="flex justify-between items-center pb-2">
+                  <span className="text-sm text-gray-500">Confidence Score</span>
+                  <span className="text-sm font-bold text-blue-600">98.5%</span>
+                </div>
               </div>
-              <div className="w-32 h-24 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-center">
-                <div className="w-16 h-16 rounded-full border-4 border-gray-200 border-t-indigo-500 border-r-indigo-500 transform -rotate-45" />
+              
+              <div className="w-32 h-32 bg-gray-50 rounded-xl border border-gray-100 flex flex-col items-center justify-center relative shrink-0">
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl font-black text-gray-900">98</span>
+                  <span className="text-[10px] uppercase font-bold text-gray-400">Score</span>
+                </div>
+                <svg className="w-24 h-24 transform -rotate-90 drop-shadow-sm">
+                  <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-gray-200" />
+                  <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="6" fill="transparent" strokeDasharray="251.2" strokeDashoffset="5" className="text-blue-500" />
+                </svg>
               </div>
             </div>
             
-            <div className="space-y-4 pt-6 border-t border-gray-50 mt-auto">
-              <div className="w-full h-3 bg-gray-100 rounded-full" />
-              <div className="w-5/6 h-3 bg-gray-100 rounded-full" />
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex items-start gap-3 mt-auto">
+              <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-bold text-gray-900">All checks passed</h4>
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">No anomalies detected in fonts, holograms, or MRZ zones. The document is authentic and has not been altered.</p>
+              </div>
             </div>
           </div>
         </div>
