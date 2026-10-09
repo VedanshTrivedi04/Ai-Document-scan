@@ -118,9 +118,14 @@ def identity_finding_regions(field_name: str, evidence: list[dict[str, Any]]) ->
                 "field": field_name,
                 "label": label,
                 "value": item.get("value"),
-                "caption": f"{label}: {item.get('value')} (other document: "
-                + " / ".join(str(o["value"]) for o in others)
-                + ")",
+                "caption": (
+                    f"{label}: compared with the photograph on "
+                    + " / ".join(str(o["document_filename"]) for o in others)
+                    if field_name == "photo"
+                    else f"{label}: {item.get('value')} (other document: "
+                    + " / ".join(str(o["value"]) for o in others)
+                    + ")"
+                ),
                 "other": others,
                 "bounding_box": box,
             }

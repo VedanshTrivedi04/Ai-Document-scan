@@ -26,9 +26,30 @@ import pymupdf
 from app.core.config import settings
 from app.services.ocr_service import OCRConfigurationError, OCROperationError, OCRPage, OCRResult, OCRWord
 
+# How Tesseract is asked to read a scan. "4" (a single column of text of
+# variable sizes) held up best on photographs of real documents; see
+# docs/OCR_NOTES.md.
+_PAGE_SEGMENTATION = "4"
+
 # A page with fewer words of its own than this is treated as a scan.
 _MIN_TEXT_WORDS = 3
 _OCR_DPI = 300
+
+
+def _save_enhanced(pixmap: pymupdf.Pixmap, target: Path) -> None:
+    """The page as a grey image with its contrast levelled out per region
+    (CLAHE). A phone photograph has uneven light, shadows and a coloured
+    background; Tesseract reads the levelled image far better (a real passbook
+    photo: 2 of 10 reference words before, 7 after) and a clean scan the same."""
+    try:
+        import cv2
+        import numpy as np
+
+        grey = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(pixmap.height, pixmap.width, pixmap.n)
+        grey = cv2.cvtColor(grey, cv2.COLOR_RGB2GRAY) if pixmap.n >= 3 else grey[:, :, 0]
+        cv2.imwrite(str(target), cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(grey))
+    except Exception:  # noqa: BLE001 - never lose the page over an enhancement
+        pixmap.save(target)
 
 
 def _tesseract_command() -> str | None:
@@ -72,11 +93,11 @@ class LocalOCRService:
         scale_x, scale_y = page.rect.width / pixmap.width, page.rect.height / pixmap.height
         with tempfile.TemporaryDirectory() as folder:
             image = Path(folder) / "page.png"
-            pixmap.save(image)
+            _save_enhanced(pixmap, image)
             try:
                 done = subprocess.run(
                     [command, str(image), "stdout", "--tessdata-dir", str(Path(self._tessdata).resolve()),
-                     "-l", self._languages, "--psm", "6",
+                     "-l", self._languages, "--psm", _PAGE_SEGMENTATION,
                      # Asked for by setting, not by the "tsv" config file: a
                      # language folder of our own has no configs folder.
                      "-c", "tessedit_create_tsv=1"],

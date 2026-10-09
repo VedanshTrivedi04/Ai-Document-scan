@@ -118,3 +118,6 @@ backend/tests/regression/_cache/
 # Free local providers (backend/.env STORAGE_PROVIDER=local, OCR_PROVIDER=local)
 backend/local_storage/
 backend/tessdata/
+
+# Pre-trained face models (python -m app.services.face_models)
+backend/models/

@@ -387,3 +387,62 @@ def test_submitters_never_see_their_own_risk_tier_score_or_reasons(client, plain
     # ...while a reviewer sees all of it for the very same case.
     seen = client.get(f"/cases/{case.id}", headers=reviewer_headers).json()
     assert seen["risk_tier"] == "high" and seen["assessment"]["score"] == 65 and seen["flag"]["flag"] == "high"
+
+
+# ------------------------------------------- identity cases: serious conflicts
+
+def _identity_case_with_conflict(scored_case, db_session, severity, classification="conflict"):
+    from app.models.case import CaseType
+    from app.models.cross_document_finding import CrossDocumentFinding, FindingSeverity
+
+    case = scored_case("low")
+    case.case_type = CaseType.identity_verification
+    row = CrossDocumentFinding(
+        company_id=db_session.info["test_company_id"],
+        case_id=case.id,
+        field_name="date_of_birth",
+        finding_type="identity_consistency",
+        classification=classification,
+        reason="date_year_difference",
+        severity=FindingSeverity(severity),
+        description="Date of birth does not match.",
+        document_ids=[],
+    )
+    db_session.add(row)
+    db_session.commit()
+    return case, row
+
+
+@pytest.mark.parametrize("severity", ["high", "critical"])
+def test_identity_case_cannot_be_approved_over_an_undecided_serious_conflict(
+    client, reviewer_headers, scored_case, db_session, severity
+):
+    case, finding_row = _identity_case_with_conflict(scored_case, db_session, severity)
+    res = client.post(f"/cases/{case.id}/approve", json={}, headers=reviewer_headers)
+    assert res.status_code == 409
+    assert "still need a decision" in res.json()["detail"]
+
+    # decided either way, approval goes through
+    decided = client.patch(
+        f"/cases/{case.id}/findings/{finding_row.id}", json={"decision": "dismissed"}, headers=reviewer_headers
+    )
+    assert decided.status_code == 200, decided.text
+    assert client.post(f"/cases/{case.id}/approve", json={}, headers=reviewer_headers).status_code == 200
+
+
+@pytest.mark.parametrize("severity, classification", [("medium", "conflict"), ("low", "conflict"), ("info", "harmless_variant")])
+def test_lesser_or_harmless_findings_do_not_block_approval(
+    client, reviewer_headers, scored_case, db_session, severity, classification
+):
+    case, _ = _identity_case_with_conflict(scored_case, db_session, severity, classification)
+    assert client.post(f"/cases/{case.id}/approve", json={}, headers=reviewer_headers).status_code == 200
+
+
+def test_rejecting_is_never_blocked_by_open_findings(client, reviewer_headers, scored_case, db_session):
+    case, _ = _identity_case_with_conflict(scored_case, db_session, "critical")
+    res = client.post(f"/cases/{case.id}/reject", json={"reason": "Not the same person."}, headers=reviewer_headers)
+    assert res.status_code == 200
+
+
+def test_invoice_cases_are_not_affected_by_the_gate(client, reviewer_headers, scored_case):
+    assert client.post(f"/cases/{scored_case('low').id}/approve", json={}, headers=reviewer_headers).status_code == 200

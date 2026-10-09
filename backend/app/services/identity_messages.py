@@ -26,6 +26,7 @@ FIELD_LABELS = {
     "address": "Address",
     "annual_income": "Annual income",
     "id_number": "Identity number",
+    "photo": "Photograph",
 }
 
 DOCUMENT_LABELS = {
@@ -56,6 +57,10 @@ SEVERITY_LABELS = {
 
 SUMMARY_CONFLICT = "{field} does not match: {a} on the {doc_a} and {b} on the {doc_b}."
 SUMMARY_HARMLESS = "{field} is written differently: {a} on the {doc_a} and {b} on the {doc_b}."
+# The photographs on two documents (app/services/face_service.py) have no text to quote.
+SUMMARY_PHOTO_CONFLICT = "The photograph on the {doc_a} does not look like the photograph on the {doc_b}."
+SUMMARY_PHOTO_UNCERTAIN = "The photograph on the {doc_a} could not be matched with the one on the {doc_b}."
+SUMMARY_PHOTO_MATCH = "The photograph on the {doc_a} and the one on the {doc_b} show the same person."
 
 HARMLESS_REASONS = {
     "spelling_variant": "Both spellings sound the same.",
@@ -65,6 +70,7 @@ HARMLESS_REASONS = {
     "honorific_or_word_order": "Only the title or the order of the words differs.",
     "extra_middle_name": "One document leaves out a middle name.",
     "address_formatting": "Only the way the address is written differs.",
+    "photo_match": "The faces look alike.",
 }
 _HARMLESS_FALLBACK = "The two mean the same."
 
@@ -81,6 +87,11 @@ CONFLICT_REASONS = {
     "address_locality_difference": "The locality, city or postal code does not match.",
     "address_difference": "The house or plot number does not match.",
     "id_number_difference": "The same kind of document shows two different numbers.",
+    "unclear_reading": (
+        "A value on one of the documents could not be read clearly, so this may be a misreading and not a real difference."
+    ),
+    "photo_different_person": "The two faces look like two different people.",
+    "photo_uncertain": "The faces are not clearly the same. A small, blurred or older photograph can cause this.",
 }
 _CONFLICT_FALLBACK = "The two documents do not agree."
 _INCOME_RATIO = "The higher amount is {ratio} times the lower one."
@@ -106,6 +117,9 @@ ACTIONS = {
     "address_locality_difference": _MOVED,
     "address_difference": _MOVED,
     "id_number_difference": "Check that both documents belong to the same person.",
+    "unclear_reading": "Check the original documents, or upload a clearer photo of the one that is hard to read.",
+    "photo_different_person": _SAME_PERSON,
+    "photo_uncertain": "Compare the two photographs yourself, or ask for a clearer, recent document.",
 }
 _ACTION_FALLBACK = _CORRECT_OTHER
 
@@ -114,7 +128,8 @@ def catalog_strings() -> list[str]:
     """Every English string a message can be built from."""
     strings = [
         *FIELD_LABELS.values(), *DOCUMENT_LABELS.values(), _UNKNOWN_DOCUMENT, *SEVERITY_LABELS.values(),
-        SUMMARY_CONFLICT, SUMMARY_HARMLESS, *HARMLESS_REASONS.values(), _HARMLESS_FALLBACK,
+        SUMMARY_CONFLICT, SUMMARY_HARMLESS, SUMMARY_PHOTO_CONFLICT, SUMMARY_PHOTO_UNCERTAIN,
+        SUMMARY_PHOTO_MATCH, *HARMLESS_REASONS.values(), _HARMLESS_FALLBACK,
         *CONFLICT_REASONS.values(), _CONFLICT_FALLBACK, _INCOME_RATIO, _YEARS_APART, _ONE_YEAR_APART,
         NO_ACTION, *ACTIONS.values(),
     ]
@@ -130,6 +145,7 @@ _HINDI = {
     "Address": "पता",
     "Annual income": "वार्षिक आय",
     "Identity number": "पहचान संख्या",
+    "Photograph": "फ़ोटो",
     # documents
     "identity card": "पहचान पत्र",
     "tax identity card": "कर पहचान पत्र",
@@ -155,6 +171,19 @@ _HINDI = {
     # summaries
     SUMMARY_CONFLICT: "{field} में अंतर है: {doc_a} पर {a} और {doc_b} पर {b}।",
     SUMMARY_HARMLESS: "{field} अलग तरीके से लिखा है: {doc_a} पर {a} और {doc_b} पर {b}।",
+    SUMMARY_PHOTO_CONFLICT: "{doc_a} की फ़ोटो {doc_b} की फ़ोटो से मेल नहीं खाती।",
+    SUMMARY_PHOTO_UNCERTAIN: "{doc_a} की फ़ोटो का {doc_b} की फ़ोटो से मिलान पक्का नहीं हो सका।",
+    SUMMARY_PHOTO_MATCH: "{doc_a} और {doc_b} की फ़ोटो एक ही व्यक्ति की हैं।",
+    "The faces look alike.": "दोनों चेहरे एक जैसे दिखते हैं।",
+    "The two faces look like two different people.": "दोनों चेहरे दो अलग-अलग व्यक्तियों के लगते हैं।",
+    "A value on one of the documents could not be read clearly, so this may be a misreading and not a real difference.":
+        "एक दस्तावेज़ का कोई मान साफ़ पढ़ा नहीं जा सका, इसलिए यह पढ़ने की गलती हो सकती है, असली अंतर नहीं।",
+    "Check the original documents, or upload a clearer photo of the one that is hard to read.":
+        "मूल दस्तावेज़ देखें, या जो पढ़ने में कठिन है उसकी ज़्यादा साफ़ फ़ोटो अपलोड करें।",
+    "The faces are not clearly the same. A small, blurred or older photograph can cause this.":
+        "चेहरे साफ़ तौर पर एक जैसे नहीं हैं। छोटी, धुंधली या पुरानी फ़ोटो से ऐसा हो सकता है।",
+    "Compare the two photographs yourself, or ask for a clearer, recent document.":
+        "दोनों फ़ोटो खुद मिलाकर देखें, या ज़्यादा साफ़ और नया दस्तावेज़ माँगें।",
     # why it does not matter
     "Both spellings sound the same.": "दोनों वर्तनी का उच्चारण एक जैसा है।",
     "One document uses initials for the same name.": "एक दस्तावेज़ में उसी नाम के केवल शुरुआती अक्षर लिखे हैं।",
@@ -227,9 +256,19 @@ def display_value(field_name: str, field: dict[str, Any]) -> str:
     return str(value)
 
 
-def _templates(classification: str, reason: str, detail: dict[str, Any] | None) -> tuple[str, str, str, dict]:
+def _templates(
+    classification: str, reason: str, detail: dict[str, Any] | None, field_name: str = ""
+) -> tuple[str, str, str, dict]:
     """(summary, explanation, action) templates and the numbers they quote."""
     numbers: dict[str, Any] = {}
+    if field_name == "photo":
+        summary = {
+            "photo_match": SUMMARY_PHOTO_MATCH,
+            "photo_uncertain": SUMMARY_PHOTO_UNCERTAIN,
+        }.get(reason, SUMMARY_PHOTO_CONFLICT)
+        if classification == "harmless_variant":
+            return summary, HARMLESS_REASONS.get(reason, _HARMLESS_FALLBACK), NO_ACTION, numbers
+        return summary, CONFLICT_REASONS.get(reason, _CONFLICT_FALLBACK), ACTIONS.get(reason, _ACTION_FALLBACK), numbers
     if classification == "harmless_variant":
         return SUMMARY_HARMLESS, HARMLESS_REASONS.get(reason, _HARMLESS_FALLBACK), NO_ACTION, numbers
 
@@ -256,7 +295,7 @@ def build_message(
     together (`text`), and the labels to show beside them."""
     language = translation_service.normalize_language(language)
     first, second = evidence
-    summary, explanation, action, numbers = _templates(classification, reason, detail)
+    summary, explanation, action, numbers = _templates(classification, reason, detail, field_name)
     field_label = FIELD_LABELS.get(field_name, field_name.replace("_", " ").capitalize())
     severity_label = SEVERITY_LABELS.get(severity, severity.capitalize())
     documents = [DOCUMENT_LABELS.get(e.get("document_type") or "", _UNKNOWN_DOCUMENT) for e in evidence]

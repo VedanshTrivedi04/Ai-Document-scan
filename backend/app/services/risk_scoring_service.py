@@ -49,7 +49,7 @@ from sqlalchemy.orm import Session
 from app.models.audit_log import AuditLog
 from app.models.case import Case, CaseStatus, RiskTier, is_identity_case_type
 from app.models.case_risk_assessment import CaseRiskAssessment
-from app.models.cross_document_finding import CrossDocumentFinding
+from app.models.cross_document_finding import REVIEW_DISMISSED, CrossDocumentFinding
 from app.models.document import Document, DocumentProcessingStatus
 from app.models.document_check import DocumentCheck, DocumentCheckStatus, DocumentCheckType
 from app.models.risk_rule import RiskRule
@@ -289,6 +289,8 @@ def _gather_evidence(db: Session, company_id: uuid.UUID, case_id: uuid.UUID) -> 
         .scalars()
         .all()
     )
+    # A contradiction a reviewer dismissed is no issue (app/api/findings.py).
+    cross = [f for f in cross if not (f.classification == "conflict" and f.review_status == REVIEW_DISMISSED)]
     sig_rows = db.execute(
         select(SignatureMatch, SignatureReference.person_name)
         .join(SignatureReference, SignatureReference.id == SignatureMatch.signature_reference_id)

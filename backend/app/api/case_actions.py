@@ -13,6 +13,10 @@ disabled buttons and confirmation step are conveniences, not the guard:
               block on a high-risk case (a reviewer may have verified
               something the system couldn't), but anything above "low"
               requires a written justification, which is stored.
+              An identity case also needs every high or critical conflict its
+              documents show to be decided first (accepted or dismissed, see
+              app/api/findings.py): approving over an undecided serious
+              contradiction is refused, so none is waved through unseen.
   reject    - a reason is required.
   escalate  - moves the case to the L2 tier (`assigned_tier` = "l2"); it never
               changes `status`. One-directional: there is no de-escalation,
@@ -26,12 +30,13 @@ Audit History screen reads.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_tenant_db, require_company_role
 from app.api.case_access import ensure_can_act, scoped_company_id
-from app.models.case import Case, CaseStatus, RiskTier
+from app.models.case import Case, CaseStatus, RiskTier, is_identity_case_type
+from app.models.cross_document_finding import REVIEW_PENDING, CrossDocumentFinding, FindingSeverity
 from app.models.case_action import CaseAction
 from app.models.user import User, UserRole, role_label
 from app.schemas.case import (
@@ -85,13 +90,31 @@ def _decision(db: Session, case: Case, action: CaseAction, actor: User) -> CaseD
     )
 
 
+def _undecided_serious_conflicts(db: Session, case: Case) -> int:
+    """How many high/critical conflicts of an identity case no reviewer has
+    decided yet (always 0 for other kinds of case)."""
+    if not is_identity_case_type(case.case_type):
+        return 0
+    return db.execute(
+        select(func.count())
+        .select_from(CrossDocumentFinding)
+        .where(
+            CrossDocumentFinding.case_id == case.id,
+            CrossDocumentFinding.company_id == case.company_id,
+            CrossDocumentFinding.classification == "conflict",
+            CrossDocumentFinding.review_status == REVIEW_PENDING,
+            CrossDocumentFinding.severity.in_([FindingSeverity.high, FindingSeverity.critical]),
+        )
+    ).scalar_one()
+
+
 @router.post(
     "/{case_id}/approve",
     response_model=CaseDecisionResponse,
     summary="Approve a case",
     description=(
         "Company reviewers only (platform admins: 403). Requires the automated pipeline to have finished and a risk "
-        "assessment to exist (409 otherwise). Above `low` risk a written justification (`note`, "
+        "assessment to exist, and an identity case's high/critical conflicts to be decided (409 otherwise). Above `low` risk a written justification (`note`, "
         "at least 10 characters) is required (422). Approving an already-decided case is a 409. "
         "Writes a `case_actions` row and an audit event."
     ),
@@ -121,6 +144,14 @@ def approve_case(
         if pipeline.pending:
             detail += " Waiting on: " + "; ".join(pipeline.pending[:5]) + "."
         raise HTTPException(status.HTTP_409_CONFLICT, detail)
+
+    undecided = _undecided_serious_conflicts(db, case)
+    if undecided:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{undecided} high or critical contradiction{'s' if undecided != 1 else ''} between this person's "
+            "documents still need a decision. Accept or dismiss each finding first.",
+        )
 
     note = (payload.note or "").strip() or None
     if assessment.tier != RiskTier.low and (note is None or len(note) < _MIN_JUSTIFICATION_CHARS):

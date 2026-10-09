@@ -480,3 +480,48 @@ def test_case_detail_returns_findings_with_evidence_and_highlight_regions(
     assert region["bounding_box"]["page"] == 1
     assert region["other"][0]["value"] == "12 March 1997"
     assert region["caption"] == "Date of birth: 12 March 1982 (other document: 12 March 1997)"
+
+
+# ---- a value the reader was unsure of is not "a different person" ----------------
+
+def _idoc(doc_id, document_type, **fields):
+    return BundleDocument(doc_id, f"{doc_id}.jpg", document_type, fields)
+
+
+def _unsure(text, latin="same"):
+    field = _name(text, latin)
+    field["uncertain"] = True
+    return field
+
+
+def test_a_misread_name_is_raised_for_checking_not_as_a_different_person():
+    """Real case: a photographed passbook read as "SAMRIDDH] GUPTS" against
+    "SAMRIDDHI GUPTA" on the PAN card."""
+    sure = _idoc("pan", "tax_id_card", full_name=_name("SAMRIDDHI GUPTA", None))
+    unsure = _idoc("passbook", "address_proof", full_name=_unsure("MISS. SAMRIDDH] GUPTS", None))
+    (finding,) = [f for f in find_identity_contradictions([unsure, sure]) if f["field_name"] == "full_name"]
+    assert finding["classification"] == "conflict"
+    assert finding["reason"] == "unclear_reading" and finding["severity"] == FindingSeverity.medium
+    assert finding["detail"]["was"] == "different_name" and finding["detail"]["was_severity"] == "critical"
+    assert "could not be read clearly" in finding["description"]
+
+
+def test_the_same_difference_on_values_that_were_read_with_confidence_stays_critical():
+    one = _idoc("a", "national_id_card", full_name=_name("Rahul Verma", None))
+    two = _idoc("b", "voter_id_card", full_name=_name("Rohit Verma", None))
+    (finding,) = find_identity_contradictions([one, two])
+    assert finding["reason"] == "different_name" and finding["severity"] == FindingSeverity.critical
+
+
+def test_doubt_does_not_touch_harmless_variants_or_minor_differences():
+    one = _idoc("a", "national_id_card", full_name=_unsure("A. P. Sharma", None))
+    two = _idoc("b", "voter_id_card", full_name=_name("Ajay Prakash Sharma", None))
+    (finding,) = find_identity_contradictions([one, two])
+    assert finding["classification"] == "harmless_variant" and finding["reason"] == "initials"
+
+
+def test_an_unsure_date_of_birth_year_difference_is_medium():
+    one = _idoc("a", "national_id_card", date_of_birth={"value": "1982-03-12", "uncertain": True})
+    two = _idoc("b", "voter_id_card", date_of_birth={"value": "1997-03-12"})
+    (finding,) = find_identity_contradictions([one, two])
+    assert finding["reason"] == "unclear_reading" and finding["severity"] == FindingSeverity.medium

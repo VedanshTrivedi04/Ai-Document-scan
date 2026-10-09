@@ -29,6 +29,7 @@ from app.schemas.case import (
 )
 from app.services.audit_service import record_event
 from app.services.identity_messages import warm_up as warm_up_messages
+from app.services.risk_scoring_service import request_case_scoring
 from app.services.translation_service import normalize_language
 
 router = APIRouter(prefix="/cases", tags=["findings"])
@@ -108,6 +109,8 @@ def review_finding(
         },
     )
     db.commit()
+    # A dismissed conflict no longer counts toward the case's risk.
+    request_case_scoring(case_id, company_id)
 
     language = normalize_language(lang)
     warm_up_messages(language)
