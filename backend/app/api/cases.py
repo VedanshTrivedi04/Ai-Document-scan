@@ -216,6 +216,9 @@ def list_cases(
         stmt = stmt.where(Case.assigned_tier == tier_filter)
     if status_filter is not None:
         stmt = stmt.where(Case.status == status_filter)
+    else:
+        # Hide soft-deleted/closed cases by default so the list stays clean
+        stmt = stmt.where(Case.status != CaseStatus.closed)
     if case_type_filter is not None:
         stmt = stmt.where(Case.case_type == case_type_filter)
 
@@ -448,3 +451,47 @@ def get_case_audit_log(
         )
         for row in rows
     ]
+
+
+@router.delete(
+    "/{case_id}",
+    summary="Delete / close a case",
+    description=(
+        "Soft-deletes / closes a case by setting its status to 'closed' and recording a deletion event in the audit log. "
+        "Case history and activity timeline remain permanently intact in the system-of-record."
+    ),
+    responses={
+        200: {"description": "Case successfully closed / marked deleted with history preserved."},
+        401: {"description": "Missing, invalid or expired bearer token, or the user is inactive."},
+        403: {"description": "Platform admins cannot delete cases."},
+        404: {"description": "Case not found."},
+    },
+)
+def delete_case(
+    case_id: uuid.UUID,
+    scope: CaseScope = Depends(get_case_scope),
+) -> dict:
+    db, current_user = scope.db, scope.ctx.user
+    if current_user.is_platform_admin:
+        raise HTTPException(403, "Platform admins cannot delete cases.")
+
+    case = _load_visible_case(db, case_id, current_user)
+    old_status = case.status
+    case.status = CaseStatus.closed
+
+    # Record deletion action and audit log event so history is never lost!
+    record_event(
+        db,
+        "case_deleted",
+        case_id=case.id,
+        actor_user_id=current_user.id,
+        event_data={
+            "from_status": old_status.value,
+            "to_status": CaseStatus.closed.value,
+            "deleted_by": current_user.email,
+            "reason": "User requested case deletion (archived/closed with history retained)",
+        },
+        company_id=scope.company_id,
+    )
+    db.commit()
+    return {"message": "Case closed successfully. History has been preserved.", "case_id": str(case_id), "status": case.status.value}

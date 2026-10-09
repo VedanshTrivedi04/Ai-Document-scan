@@ -1,18 +1,18 @@
-import * as React from "react"
-import {
   AlertTriangleIcon,
   CheckCircle2Icon,
   ChevronDownIcon,
   ClockIcon,
   DownloadIcon,
   FileTextIcon,
+  Loader2Icon,
   PlusIcon,
   SearchIcon,
+  Trash2Icon,
 } from "lucide-react"
 import { Link, useNavigate } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { listCases } from "@/api/cases"
+import { deleteCase, listCases } from "@/api/cases"
 import { useAuth } from "@/hooks/useAuth"
 import { Nav } from "@/design-system/Nav"
 import { CASE_TYPES, CASE_TYPE_LABELS, type CaseListItem } from "@/types/case"
@@ -63,14 +63,25 @@ function mapApiToMyCase(c: CaseListItem): MyCaseItem {
 export function MyCasesPage() {
   const navigate = useNavigate()
   const { token, user } = useAuth()
+  const queryClient = useQueryClient()
   const [search, setSearch] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("")
   const [typeFilter, setTypeFilter] = React.useState("")
+  const [caseToDelete, setCaseToDelete] = React.useState<MyCaseItem | null>(null)
 
   const { data: apiCases, isLoading } = useQuery({
     queryKey: ["cases", token],
     queryFn: () => listCases(token as string),
     enabled: Boolean(token),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (caseId: string) => deleteCase(caseId, token!),
+    onSuccess: () => {
+      setCaseToDelete(null)
+      void queryClient.invalidateQueries({ queryKey: ["cases"] })
+      void queryClient.invalidateQueries({ queryKey: ["family"] })
+    },
   })
 
   const allMyCases = React.useMemo(() => {
@@ -340,12 +351,22 @@ export function MyCasesPage() {
                     <td className="py-4 px-6 text-slate-500 whitespace-nowrap">{row.submitted}</td>
 
                     <td className="py-4 px-6 text-right whitespace-nowrap">
-                      <Link
-                        to={`/cases/${row.id}`}
-                        className="inline-flex items-center text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
-                      >
-                        View details <span className="ml-1">→</span>
-                      </Link>
+                      <div className="inline-flex items-center gap-3">
+                        <Link
+                          to={`/cases/${row.id}`}
+                          className="inline-flex items-center text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                        >
+                          View details <span className="ml-1">→</span>
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => setCaseToDelete(row)}
+                          title="Delete case (history retained)"
+                          className="inline-flex items-center justify-center size-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                        >
+                          <Trash2Icon className="size-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -354,6 +375,60 @@ export function MyCasesPage() {
           </div>
         </section>
       </main>
+
+      {/* Delete Confirmation Modal */}
+      {caseToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-2xs p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 rounded-xl bg-rose-50 text-rose-600">
+                <Trash2Icon className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Delete Case</h3>
+                <p className="text-xs text-slate-500 font-mono">{caseToDelete.caseNumber}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed mb-3">
+              Kya aap sure hain ki aap is case ko delete / close karna chahte hain?
+            </p>
+
+            <div className="rounded-xl border border-blue-200/80 bg-blue-50/60 p-3 text-xs text-blue-900 mb-5">
+              <span className="font-semibold block mb-0.5">Audit History Preserved:</span>
+              <p className="text-blue-800 text-[11.5px] leading-relaxed">
+                Aapka case queue se remove ho jayega, par iska audit trail, extracted records aur verification history system ke record mein hamesha safe rahegi.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={deleteMutation.isPending}
+                onClick={() => setCaseToDelete(null)}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate(caseToDelete.id)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition"
+              >
+                {deleteMutation.isPending ? (
+                  <>
+                    <Loader2Icon className="size-3.5 animate-spin" />
+                    <span>Deleting…</span>
+                  </>
+                ) : (
+                  <span>Delete Case</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

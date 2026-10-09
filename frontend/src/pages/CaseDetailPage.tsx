@@ -11,11 +11,12 @@ import {
   UsersIcon,
   PlusIcon,
   Loader2Icon,
+  Trash2Icon,
 } from "lucide-react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { getCase, getCaseAuditLog, getSignatureMatches, uploadDocument } from "@/api/cases"
+import { deleteCase, getCase, getCaseAuditLog, getSignatureMatches, uploadDocument } from "@/api/cases"
 import { getCatalog, getLanguages } from "@/api/i18n"
 import { getCaseProfile } from "@/api/profiles"
 import { useAuth } from "@/hooks/useAuth"
@@ -228,6 +229,20 @@ export function CaseDetailPage() {
   const queryClient = useQueryClient()
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
   const [uploadError, setUploadError] = React.useState<string | null>(null)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false)
+  const navigate = useNavigate()
+
+  const deleteMutation = useMutation({
+    mutationFn: () => {
+      if (!caseId || !token) throw new Error("Missing case ID or token")
+      return deleteCase(caseId, token)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["cases"] })
+      void queryClient.invalidateQueries({ queryKey: ["family"] })
+      navigate("/cases")
+    },
+  })
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -381,6 +396,18 @@ export function CaseDetailPage() {
             )}
             {canExport && caseId && token && <CaseReportExport caseId={caseId} token={token} />}
             {caseDetail && !isIdentity && <TierBadge tier={caseDetail.assigned_tier} />}
+            {caseDetail && !isSupportView && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsDeleteModalOpen(true)}
+                title="Delete this case (history is preserved)"
+                className="h-8.5 px-3 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200 gap-1.5"
+              >
+                <Trash2Icon className="size-3.5" />
+                <span>Delete case</span>
+              </Button>
+            )}
           </div>
         </div>
       </section>
@@ -1079,6 +1106,60 @@ export function CaseDetailPage() {
           <span>{APP_NAME} · {APP_FULL_NAME}</span>
         </div>
       </footer>
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && caseDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-2xs p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 rounded-xl bg-rose-50 text-rose-600">
+                <Trash2Icon className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Delete Case</h3>
+                <p className="text-xs text-slate-500 font-mono">{caseDetail.case_number}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed mb-3">
+              Kya aap sure hain ki aap is case ko delete / close karna chahte hain?
+            </p>
+
+            <div className="rounded-xl border border-blue-200/80 bg-blue-50/60 p-3 text-xs text-blue-900 mb-5">
+              <span className="font-semibold block mb-0.5">Audit History Preserved:</span>
+              <p className="text-blue-800 text-[11.5px] leading-relaxed">
+                Aapka case active lists se remove ho jayega, par iska audit trail, extracted records aur verification history system ke record mein hamesha safe rahegi.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={deleteMutation.isPending}
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition"
+              >
+                {deleteMutation.isPending ? (
+                  <>
+                    <Loader2Icon className="size-3.5 animate-spin" />
+                    <span>Deleting…</span>
+                  </>
+                ) : (
+                  <span>Delete Case</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

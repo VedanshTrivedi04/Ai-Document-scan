@@ -55,6 +55,13 @@ export function getCaseAuditLog(caseId: string, token: string): Promise<AuditLog
   return apiFetch<AuditLogEntry[]>(`/cases/${caseId}/audit-log`, { token })
 }
 
+export function deleteCase(caseId: string, token: string): Promise<{ message: string; case_id: string; status: string }> {
+  return apiFetch<{ message: string; case_id: string; status: string }>(`/cases/${caseId}`, {
+    method: "DELETE",
+    token,
+  })
+}
+
 /**
  * Uploads one file to a case, reporting upload progress. Plain `fetch`
  * has no reliable cross-browser upload-progress event, so this uses

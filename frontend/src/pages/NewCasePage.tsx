@@ -65,7 +65,7 @@ export function NewCasePage() {
   const [formError, setFormError] = React.useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [createdCase, setCreatedCase] = React.useState<Case | null>(null)
-  const [forceNewCase, setForceNewCase] = React.useState(false)
+  const [reuseExistingProfile, setReuseExistingProfile] = React.useState(false)
 
   // Uploaded document records (returned by the upload endpoint) — used to
   // populate the "Set as reference signature" list after all uploads complete.
@@ -113,28 +113,25 @@ export function NewCasePage() {
   const isIdentity = isIdentityCase(selectedCaseType)
   const [submissionCategory, setSubmissionCategory] = React.useState<"person" | "claim">("person")
 
-  // Target existing case for identity bundle reuse
-  const existingCaseIdToReuse = React.useMemo(() => {
-    if (forceNewCase || !isIdentity || isOrgSite) return null
+  // Find if there is an existing profile available for this member/user
+  const candidateExistingCaseId = React.useMemo(() => {
+    if (!isIdentity || isOrgSite) return null
 
-    // If a household member is selected, reuse their latest case if available
+    // If a household member is selected, check their latest case
     if (selectedMember?.latest_case_id) {
       return selectedMember.latest_case_id
     }
 
-    // If head/self is selected or no specific member is chosen, check if self has an existing case
     if (selectedFamilyMemberId) {
       const member = familyData?.members?.find((m) => m.id === selectedFamilyMemberId)
       if (member?.latest_case_id) return member.latest_case_id
     }
 
-    // If user has familyData, find the 'self' member or head member
     const selfMember = familyData?.members?.find((m) => m.is_head || m.relation === "self")
     if (selfMember?.latest_case_id) {
       return selfMember.latest_case_id
     }
 
-    // Check user's most recent identity case from listCases
     const myCases = (userCases || []).filter(
       (c) => !user?.id || c.submitted_by?.id === user.id || c.submitted_by?.email === user.email
     )
@@ -143,17 +140,21 @@ export function NewCasePage() {
     }
 
     return null
-  }, [forceNewCase, isIdentity, isOrgSite, selectedMember, selectedFamilyMemberId, familyData, userCases, user])
+  }, [isIdentity, isOrgSite, selectedMember, selectedFamilyMemberId, familyData, userCases, user])
+
+  // Only reuse if user explicitly checked "Add to existing profile", otherwise ALWAYS create a fresh case!
+  const existingCaseIdToReuse = reuseExistingProfile ? candidateExistingCaseId : null
 
   const existingCaseNumber = React.useMemo(() => {
-    if (!existingCaseIdToReuse) return null
+    const idToLookup = candidateExistingCaseId
+    if (!idToLookup) return null
     if (selectedMember?.cases?.length) {
-      const match = selectedMember.cases.find((c) => c.id === existingCaseIdToReuse)
+      const match = selectedMember.cases.find((c) => c.id === idToLookup)
       if (match) return match.case_number
     }
-    const match = (userCases || []).find((c) => c.id === existingCaseIdToReuse)
+    const match = (userCases || []).find((c) => c.id === idToLookup)
     return match?.case_number || "Existing Profile"
-  }, [existingCaseIdToReuse, selectedMember, userCases])
+  }, [candidateExistingCaseId, selectedMember, userCases])
 
   const handleCategorySelect = (category: "person" | "claim") => {
     setSubmissionCategory(category)
@@ -327,7 +328,7 @@ export function NewCasePage() {
                 <div className="flex flex-col gap-4">
                   <div className="rounded-md border border-success/30 bg-success/10 px-4 py-3 text-sm">
                     <p className="font-medium text-foreground">
-                      {existingCaseIdToReuse && !forceNewCase
+                      {existingCaseIdToReuse
                         ? "Documents added to profile successfully."
                         : "Case submitted successfully."}
                     </p>
@@ -506,35 +507,30 @@ export function NewCasePage() {
                     {/* Person document checklist hint & existing bundle notice */}
                     {submissionCategory === "person" && (
                       <div className="flex flex-col gap-2 mt-1">
-                        {existingCaseIdToReuse ? (
-                          <div className="rounded-xl border border-blue-300 bg-blue-50/80 p-3.5 text-xs text-blue-900 shadow-xs">
+                        {candidateExistingCaseId ? (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 text-xs text-slate-800 shadow-2xs">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-semibold flex items-center gap-1.5 text-blue-950">
-                                <CheckCircle2Icon className="size-4 text-blue-600 shrink-0" />
-                                Connecting to your active profile ({existingCaseNumber})
+                              <span className="font-semibold flex items-center gap-1.5 text-slate-900">
+                                <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
+                                {reuseExistingProfile
+                                  ? `Adding to existing profile (${existingCaseNumber})`
+                                  : "Starting a fresh new case"}
                               </span>
                               <button
                                 type="button"
-                                onClick={() => setForceNewCase(true)}
-                                className="text-[11px] font-medium text-blue-700 underline hover:text-blue-900 shrink-0"
+                                onClick={() => setReuseExistingProfile(!reuseExistingProfile)}
+                                className="text-[11px] font-semibold text-primary underline hover:text-primary/80 shrink-0"
                               >
-                                Create separate bundle instead
+                                {reuseExistingProfile
+                                  ? "Switch to fresh new case instead"
+                                  : `Add to existing profile (${existingCaseNumber}) instead`}
                               </button>
                             </div>
-                            <p className="mt-1 text-blue-800 leading-relaxed text-[11.5px]">
-                              Any new document you upload (PAN, Aadhaar, Voter ID, Driving Licence, etc.) will be automatically added to this person's bundle. All your documents will be cross-analyzed together to detect inconsistencies in name, DOB, address, or parent names.
+                            <p className="mt-1 text-slate-600 leading-relaxed text-[11.5px]">
+                              {reuseExistingProfile
+                                ? "New documents will be appended to this existing profile for cross-document identity verification."
+                                : "This case will be created completely clean with only the new documents you upload below."}
                             </p>
-                          </div>
-                        ) : forceNewCase ? (
-                          <div className="rounded-xl border border-amber-300 bg-amber-50/80 p-3 text-xs text-amber-900 flex items-center justify-between">
-                            <span>Creating a fresh isolated profile bundle for this upload.</span>
-                            <button
-                              type="button"
-                              onClick={() => setForceNewCase(false)}
-                              className="text-[11px] font-semibold text-amber-800 underline hover:text-amber-950"
-                            >
-                              Reconnect to existing profile
-                            </button>
                           </div>
                         ) : (
                           <div className="rounded-lg border border-blue-200/80 bg-blue-50/50 p-3 text-xs text-blue-900">
