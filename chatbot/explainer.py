@@ -23,7 +23,7 @@ def format_citizen_report(data: Dict[str, Any], lang: str = "hi") -> str:
     lines = [
         "══════════════════════════",
         "🇮🇳 *SARTHI CITIZEN ASSISTANT*",
-        f"📋 *Bundle Jaanch Report ({total_docs} Dastavej)*",
+        f"📋 *Bundle Verification Report ({total_docs} Documents)*",
         "══════════════════════════\n"
     ]
     if case_num:
@@ -31,15 +31,15 @@ def format_citizen_report(data: Dict[str, Any], lang: str = "hi") -> str:
 
     # Scanned documents overview
     if scanned_docs:
-        lines.append("📑 *Scan Kiye Gaye Dastavej:*")
+        lines.append("📑 *Scanned Documents:*")
         for doc in scanned_docs:
             lines.append(f"  • {doc}")
         lines.append("")
 
     # Critical Conflicts
     if conflicts:
-        lines.append("🚨 *KHATRA: Critical Conflicts Mile Hain!*")
-        lines.append("_Neeche diye gaye antar ki wajah se sarkari form reject ho sakta hai:_\n")
+        lines.append("🚨 *CRITICAL CONFLICTS DETECTED:*")
+        lines.append("_These discrepancies can cause welfare scheme applications to be rejected:_\n")
 
         for idx, conf in enumerate(conflicts, start=1):
             field = conf.get("field", "Field")
@@ -54,18 +54,18 @@ def format_citizen_report(data: Dict[str, Any], lang: str = "hi") -> str:
             lines.append(f"*{idx}. {field}* [Severity: *{severity}*]")
             lines.append(f"  • *{d1_name}:* `{val1}`")
             lines.append(f"  • *{d2_name}:* `{val2}`")
-            lines.append(f"  • *Karan:* _{msg}_")
+            lines.append(f"  • *Reason:* _{msg}_")
 
             # Official Resolution Precedence Advice
             advice = _get_resolution_precedence(field, reason, d1_name, d2_name)
             if advice:
-                lines.append(f"  • 🛠️ *Samadhaan:* {advice}")
+                lines.append(f"  • 🛠️ *Remedy:* {advice}")
             lines.append("")
 
     # Harmless Variants
     if harmless_variants:
-        lines.append("ℹ️ *HARMLESS VARIANTS (Chhoti Galtiyan - Safe):*")
-        lines.append("_Inhe AI ne harmless maan kar pass kar diya hai (Application reject nahi hogi):_\n")
+        lines.append("ℹ️ *HARMLESS VARIANTS (Safe Minor Differences):*")
+        lines.append("_Identified as harmless by AI rules (Application will not be rejected):_\n")
 
         for h in harmless_variants:
             field = h.get("field", "Field")
@@ -82,7 +82,7 @@ def format_citizen_report(data: Dict[str, Any], lang: str = "hi") -> str:
 
     # Clean Matches
     if matches:
-        lines.append("✅ *BILKUL SAHI MILAN (Exact Matches):*")
+        lines.append("✅ *EXACT MATCHES:*")
         for m in matches:
             lines.append(f"  • {m}")
         lines.append("")
@@ -90,18 +90,18 @@ def format_citizen_report(data: Dict[str, Any], lang: str = "hi") -> str:
     # Actionable Guidance
     lines.append("──────────────────────────")
     if conflicts:
-        lines.append("💡 *AGLA KADAM (Action Advice):*")
-        lines.append("1. Kripya application form abhi submit *NA* karein.")
-        lines.append("2. Upar bataye gaye samadhaan ke anusaar apne nazdeeki CSC / Tehsildar office se dastavej sudharwayein.")
-        lines.append("3. Correction ke baad naye document ke sath aavedan karein.")
+        lines.append("💡 *ACTION ADVICE:*")
+        lines.append("1. Do NOT submit application forms with conflicting details.")
+        lines.append("2. Follow the recommended remedy above to update documents at UIDAI / Tehsildar / CSC center.")
+        lines.append("3. Once corrected, re-verify and proceed with your application.")
     else:
-        lines.append("🎉 *SAB KUCH SAHI HAI!*")
-        lines.append("Aapke bundle ke saare dastavej aapas me match ho rahe hain. Aap apna aavedan bina kisi sankoch ke submit kar sakte hain!")
+        lines.append("🎉 *ALL CLEAR - MATCH CONFIRMED!*")
+        lines.append("All documents in your bundle match consistently. You can safely proceed with your application!")
 
     lines.append("──────────────────────────")
-    lines.append("👉 *Yojana check karein:* `/scheme`")
-    lines.append("👉 *Verified profile dekhein:* `/profile`")
-    lines.append("🔄 *Naya bundle check karne ke liye:* `/start`")
+    lines.append("👉 *Check scheme eligibility:* `/scheme`")
+    lines.append("👉 *View verified digital profile:* `/profile`")
+    lines.append("🔄 *Start a new verification:* `/start`")
 
     return "\n".join(lines)
 

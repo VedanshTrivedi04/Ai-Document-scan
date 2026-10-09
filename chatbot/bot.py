@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 # State & Constants
 COLLECTING_DOCS = 1
-VERIFY_BUTTON_TEXT = "🔍 Verify Bundle (Jaanch Shuru Karein)"
+VERIFY_BUTTON_TEXT = "🔍 Verify Bundle Now"
 MAX_DOCS = 5
 ALBUM_DEBOUNCE_SECONDS = 1.5
 
@@ -211,10 +211,10 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
 
         if count >= MAX_DOCS:
             msg = (
-                f"✅ *Adhiktam {MAX_DOCS} dastavej prapt ho gaye!*\n\n"
+                f"✅ *Maximum {MAX_DOCS} documents received!*\n\n"
                 f"{docs_preview_text}"
                 f"{quality_banner}\n\n"
-                "⏳ *Cross-Document Contradiction Engine shuru ho raha hai...*"
+                "⏳ *Starting Cross-Document Contradiction Engine...*"
             )
             await _safe_reply(update, msg, reply_markup=ReplyKeyboardRemove())
             await _trigger_verification(update, context)
@@ -223,35 +223,35 @@ async def _debounced_upload_summary(update: Update, context: ContextTypes.DEFAUL
         if count >= 2:
             keyboard = [
                 [VERIFY_BUTTON_TEXT],
-                ["➕ Aur Dastavej Bhejein", "🔄 Nayi Jaanch (/start)"]
+                ["➕ Add More Documents", "🔄 Start Over (/start)"]
             ]
             reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
             msg = (
-                f"✅ *Dastavej {count} Scanned!*\n\n"
+                f"✅ *Document {count} Scanned!*\n\n"
                 f"{docs_preview_text}"
                 f"{quality_banner}\n\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                f"📊 Bundle: *{count}/{MAX_DOCS} Dastavej Prapt*\n\n"
-                "👉 Aap chahein to aur dastavej (jaise PAN / Address Proof) bhej sakte hain,\n"
-                f"YA niche *'{VERIFY_BUTTON_TEXT}'* dabakar sabhi dastavejon ka aapas me milan check karein!"
+                f"📊 Bundle: *{count}/{MAX_DOCS} Documents Received*\n\n"
+                "👉 You can upload more documents (e.g. PAN / Address Proof),\n"
+                f"OR tap *'{VERIFY_BUTTON_TEXT}'* below to check cross-document consistency!"
             )
             await _safe_reply(update, msg, reply_markup=reply_markup)
         else:
             keyboard = [
-                ["➕ Agla Dastavej Bhejein", "🔄 Nayi Jaanch (/start)"]
+                ["➕ Add Next Document", "🔄 Start Over (/start)"]
             ]
             reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
             msg = (
-                f"✅ *Pehla Dastavej Scan Ho Gaya!*\n\n"
+                f"✅ *First Document Scanned!*\n\n"
                 f"{docs_preview_text}"
                 f"{quality_banner}\n\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
-                "📄 *Agla Kadam:* Kripya dusra dastavej (jaise PAN Card ya Address Proof) bhejiye taaki dono ke beech milan (Cross-Verification) ho sake."
+                "📄 *Next Step:* Please send the second document (e.g. PAN Card or Address Proof) for Cross-Verification."
             )
             await _safe_reply(update, msg, reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"Error in _debounced_upload_summary: {e}", exc_info=True)
-        await _safe_reply(update, f"✅ Dastavej prapt ho gaya ({len(context.user_data.get('doc_paths', []))} files). Kripya 'Verify' dabayein ya aur document bhejiye.")
+        await _safe_reply(update, f"✅ Document received ({len(context.user_data.get('doc_paths', []))} files). Tap 'Verify' or send more documents.")
 
 async def handle_verify_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Triggered when citizen clicks verify button or types /done."""
@@ -259,7 +259,7 @@ async def handle_verify_request(update: Update, context: ContextTypes.DEFAULT_TY
     if len(doc_paths) < 2:
         await _safe_reply(
             update,
-            "⚠️ Bundle jaanch ke liye kam se kam *2 dastavej* zaroori hain. Kripya ek aur photo bhejiye."
+            "⚠️ Bundle verification requires at least *2 documents*. Please send another photo or document."
         )
         return COLLECTING_DOCS
 
@@ -272,8 +272,8 @@ async def _trigger_verification(update: Update, context: ContextTypes.DEFAULT_TY
     total = len(doc_paths)
 
     processing_msg = await update.message.reply_text(
-        f"⏳ *Kul {total} dastavejon ka milan ho raha hai...*\n"
-        "_Backend Cross-Document Engine sabhi dastavejon ko check kar raha hai..._",
+        f"⏳ *Verifying {total} documents...*\n"
+        "_Backend Cross-Document Engine is comparing all document details..._",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=ReplyKeyboardRemove(),
     )
@@ -286,8 +286,8 @@ async def _trigger_verification(update: Update, context: ContextTypes.DEFAULT_TY
         context.user_data["last_result"] = result_data
 
         keyboard = [
-            ["📜 /scheme (Yojana Jaanch)", "👤 /profile (Digital Profile)"],
-            ["➕ Aur Dastavej Jodein", "🔄 Nayi Jaanch (/start)"]
+            ["📜 /scheme (Check Scheme)", "👤 /profile (Digital Profile)"],
+            ["➕ Add More Documents", "🔄 Start Over (/start)"]
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -300,7 +300,7 @@ async def _trigger_verification(update: Update, context: ContextTypes.DEFAULT_TY
     except Exception as e:
         logger.error(f"Error during bundle verification: {e}", exc_info=True)
         await processing_msg.edit_text(
-            "❌ Dastavejon ki jaanch me takneeki samasya aayi. Kripya thodi der baad `/start` karke dobara koshish karein."
+            "❌ Technical issue during verification. Please try again with `/start`."
         )
 
 async def scheme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -406,19 +406,19 @@ async def handle_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Check if action buttons were clicked
     clean_text = text.strip().lower()
-    if text.strip() == VERIFY_BUTTON_TEXT or "jaanch karein" in clean_text:
+    if text.strip() == VERIFY_BUTTON_TEXT or any(k in clean_text for k in ["verify bundle", "verify now", "jaanch karein", "jaanch shuru"]):
         await handle_verify_request(update, context)
         return
-    if "aur dastavej" in clean_text:
-        await update.message.reply_text("📄 Kripya agle document ki photo ya file bhejiye.")
+    if any(k in clean_text for k in ["add more", "upload more", "add next", "aur dastavej", "agla dastavej"]):
+        await update.message.reply_text("📄 Please send the photo or file of the next document.")
         return
-    if "nayi jaanch" in clean_text:
+    if any(k in clean_text for k in ["start over", "new verification", "nayi jaanch"]):
         await start_command(update, context)
         return
-    if "yojana jaanch" in clean_text:
+    if any(k in clean_text for k in ["check scheme", "yojana jaanch", "scheme"]):
         await scheme_command(update, context)
         return
-    if "digital profile" in clean_text:
+    if any(k in clean_text for k in ["digital profile", "view profile", "profile"]):
         await profile_command(update, context)
         return
 

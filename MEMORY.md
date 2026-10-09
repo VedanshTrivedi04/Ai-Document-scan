@@ -1968,6 +1968,50 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Push: Successful (`origin/feat/telegram-chatbot`)
 - Status: Complete
 
+---
+
+### 2026-10-09 17:34
+
+**User Request**
+> "ye english me kar do" (accompanied by screenshot of Telegram inline buttons: `🔍 Verify Bundle (Jaanch Shuru Karein)`, `➕ Aur Dastavej Bhejein`, `🔄 Nayi Jaanch (/start)`)
+
+**Exploration**
+- Inspected button labels and intermediate intake notifications in `chatbot/bot.py`, `chatbot/verification_client.py`, and `chatbot/explainer.py`:
+  - `VERIFY_BUTTON_TEXT`: was `"🔍 Verify Bundle (Jaanch Shuru Karein)"`.
+  - Secondary buttons were: `"➕ Aur Dastavej Bhejein"`, `"🔄 Nayi Jaanch (/start)"`, `"➕ Agla Dastavej Bhejein"`, `"📜 /scheme (Yojana Jaanch)"`.
+  - Intake preview headers were: `"Dastavej X: Naam, Pata (Address), Varshik Aay"`.
+  - Citizen report headers were in Hindi/Hinglish (`"Bundle Jaanch Report"`, `"Karan"`, `"Samadhaan"`, etc.).
+
+**Work Done**
+- `chatbot/bot.py`:
+  - Updated `VERIFY_BUTTON_TEXT` to `"🔍 Verify Bundle Now"`.
+  - Updated intake keyboard buttons to clean English:
+    - `["🔍 Verify Bundle Now"]`
+    - `["➕ Add More Documents", "🔄 Start Over (/start)"]`
+    - `["➕ Add Next Document", "🔄 Start Over (/start)"]`
+    - `["📜 /scheme (Check Scheme)", "👤 /profile (Digital Profile)"]`
+  - Converted document intake notifications and verification progress texts to clean English.
+  - Enhanced `handle_chat_message` to match both new English and legacy Hindi click tokens.
+- `chatbot/verification_client.py`:
+  - Updated `get_document_preview_summary` field labels: `Document`, `Name`, `Address`, `Annual Income`.
+- `chatbot/explainer.py`:
+  - Updated `format_citizen_report` headers and sections to clean, professional English (`Bundle Verification Report`, `Critical Conflicts Detected`, `Reason`, `Remedy`, `Harmless Variants`, `Exact Matches`, `Action Advice`).
+
+**Files Changed**
+- `chatbot/bot.py`: Converted UI keyboard buttons and upload notifications to English.
+- `chatbot/verification_client.py`: English extraction preview card labels.
+- `chatbot/explainer.py`: English bundle verification report headings and action advice.
+- `MEMORY.md`: Documented changes and verification results.
+
+**Verification**
+- Validated all Python modules with `py_compile` (0 errors).
+- Verified regex button matching in `handle_chat_message`.
+
+**Git**
+- Branch: `feat/telegram-chatbot`
+- Status: Staged and committed.
+
+
 
 
 

@@ -688,8 +688,8 @@ def get_document_preview_summary(bundle_doc: BundleDocument, index: int = 1) -> 
     income = fields.get("annual_income", {}).get("raw_text") or fields.get("annual_income", {}).get("value")
 
     lines = [
-        f"📄 *Dastavej {index}: {type_label}*",
-        f"   👤 *Naam:* `{name}`",
+        f"📄 *Document {index}: {type_label}*",
+        f"   👤 *Name:* `{name}`",
     ]
     if dob != "-":
         lines.append(f"   📅 *Date of Birth (DOB):* `{dob}`")
@@ -700,9 +700,9 @@ def get_document_preview_summary(bundle_doc: BundleDocument, index: int = 1) -> 
     if num != "-":
         lines.append(f"   🆔 *ID Number:* `{num}`")
     if address:
-        lines.append(f"   📍 *Pata (Address):* `{address}`")
+        lines.append(f"   📍 *Address:* `{address}`")
     if income:
-        lines.append(f"   💰 *Varshik Aay:* `{income}`")
+        lines.append(f"   💰 *Annual Income:* `{income}`")
 
     return "\n".join(lines)
 
