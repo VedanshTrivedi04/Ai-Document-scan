@@ -253,7 +253,11 @@ def login(
 
     login_throttle.record_success(email)
     access_token = create_access_token(subject=str(user.id), extra_claims=token_claims(user))
-    return TokenResponse(access_token=access_token, company_subdomain=company_subdomain)
+    return TokenResponse(
+        access_token=access_token,
+        company_subdomain=company_subdomain,
+        must_change_password=user.must_change_password,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -399,6 +403,7 @@ def read_current_user(
         company_id=current_user.company_id,
         company_name=company_name,
         company_subdomain=company_subdomain,
+        must_change_password=current_user.must_change_password,
     )
 
 
@@ -469,6 +474,7 @@ def change_my_password(
     try:
         user = system_db.get(User, current_user.id)
         user.hashed_password = hash_password(payload.new_password)
+        user.must_change_password = False
         record_event(
             system_db,
             "user_password_changed",

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.auth import get_current_user, get_tenant_db, require_company_role
-from app.api.case_access import ensure_can_act, load_visible_case, scoped_company_id
+from app.api.case_access import ensure_can_act, ensure_can_manage_case, load_visible_case, scoped_company_id
 from app.api.tenant_access import CaseScope, get_case_scope
 from app.models.base import utcnow
 from app.models.case import Case, CaseStatus, CaseType, is_identity_case_type
@@ -97,14 +97,11 @@ def choose_profile_value(
     if case is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
 
-    # Authorisation: Either a company reviewer (L1/L2) or the head of the family who submitted this case
+    # Authorisation: a company reviewer (L1/L2), the head of the case's family, or the
+    # submitter of a case that belongs to no family member. A family member signed in
+    # on their own cannot: their head does.
     is_reviewer = has_rank(actor.role, UserRole.reviewer_l1)
-    is_submitter_head = case.submitted_by_user_id == actor.id
-    if not is_reviewer and not is_submitter_head:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            "Only the family head or a company reviewer can choose profile values for this case.",
-        )
+    ensure_can_manage_case(db, actor, case, "choose profile values for this case")
     if is_reviewer:
         ensure_can_act(actor, case)
 

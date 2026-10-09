@@ -327,7 +327,7 @@ export function BulkUploadPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {CASE_TYPES.filter((t) => t !== "identity_verification" && t !== "hiring_verification").map((type) => (
+                          {CASE_TYPES.filter((t) => t !== "identity_verification" && t !== "hiring_verification" && t !== "family_comparison").map((type) => (
                             <SelectItem key={type} value={type}>
                               {CASE_TYPE_LABELS[type]}
                             </SelectItem>

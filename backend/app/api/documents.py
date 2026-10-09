@@ -31,7 +31,7 @@ from sqlalchemy import select
 from app.api.auth import require_company_role
 from app.api.case_access import load_visible_case
 from app.api.tenant_access import CaseScope, get_case_scope
-from app.models.case import is_identity_case_type
+from app.models.case import CaseType, is_identity_case_type
 from app.models.document import Document
 from app.models.user import User, UserRole
 from app.schemas.document import DocumentFileUrlResponse, DocumentResponse
@@ -96,7 +96,10 @@ async def upload_document(
     db = scope.db
     company_id = scope.company_id
     # An identity bundle takes images too and skips the forensic checks.
-    identity_case = is_identity_case_type(load_visible_case(db, case_id, current_user).case_type)
+    target = load_visible_case(db, case_id, current_user)
+    if target.case_type == CaseType.family_comparison:
+        raise HTTPException(status.HTTP_409_CONFLICT, "A family comparison case holds no documents.")
+    identity_case = is_identity_case_type(target.case_type)
     # This company's limit, read fresh on every request (a platform admin's
     # change applies to the next upload, no new sign-in needed).
     max_bytes = company_upload_limits(db, company_id).max_file_bytes

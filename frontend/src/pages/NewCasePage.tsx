@@ -6,8 +6,8 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { z } from "zod"
 
-import { createCase, uploadDocument } from "@/api/cases"
-import { getMyFamily } from "@/api/family"
+import { createCase, getCase, uploadDocument } from "@/api/cases"
+import { getMyFamily, getMyMembership } from "@/api/family"
 import { ApiError } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { Nav } from "@/design-system/Nav"
@@ -83,8 +83,30 @@ export function NewCasePage() {
     enabled: Boolean(token && !isPlatformAdmin),
   })
 
+  // A family member with a sign-in of their own (not the head): their documents join their own bundle.
+  const { data: membership } = useQuery({
+    queryKey: ["family", "membership", token],
+    queryFn: () => getMyMembership(token!),
+    enabled: Boolean(token && !isPlatformAdmin),
+  })
+
   const isHead = familyData?.head_user_id === user?.id
   const selectedMember = familyData?.members?.find((m) => m.id === selectedFamilyMemberId)
+
+  // New documents for a person join that person's existing bundle, so the
+  // contradiction check runs across all of their documents. The head adds to
+  // the chosen member's bundle (their own when none is chosen); a member adds
+  // to theirs. "Separate bundle" opts out.
+  const [separateBundle, setSeparateBundle] = React.useState(false)
+  const targetMember = isHead
+    ? (selectedMember ?? familyData?.members?.find((m) => m.is_head))
+    : undefined
+  const existingBundleId: string | null =
+    (isHead ? targetMember?.latest_case_id : membership?.latest_case_id) ?? null
+  const existingBundleNumber = isHead
+    ? targetMember?.cases[0]?.case_number
+    : membership?.cases[0]?.case_number
+  const existingBundleOwner = isHead ? (targetMember?.full_name ?? "") : (membership?.full_name ?? "")
 
   // Always reset case creation state when landing on new case page
   React.useEffect(() => {
@@ -111,6 +133,8 @@ export function NewCasePage() {
   const selectedCaseType = watch("caseType")
   const isIdentity = isIdentityCase(selectedCaseType)
   const [submissionCategory, setSubmissionCategory] = React.useState<"person" | "claim">("person")
+  const attachToExisting =
+    isIdentity && submissionCategory === "person" && selectedCaseType === "identity_verification" && !separateBundle
 
   const handleCategorySelect = (category: "person" | "claim") => {
     setSubmissionCategory(category)
@@ -203,9 +227,22 @@ export function NewCasePage() {
 
     try {
       let activeCase = createdCase
+      if (!activeCase && attachToExisting && existingBundleId) {
+        // Add to the person's existing bundle instead of starting a new one.
+        const existing = await getCase(existingBundleId, token)
+        activeCase = {
+          id: existing.id,
+          case_number: existing.case_number,
+          case_type: existing.case_type,
+          status: existing.status,
+          risk_tier: null,
+          submitted_by_user_id: user?.id ?? "",
+          created_at: existing.created_at,
+        }
+        setCreatedCase(activeCase)
+      }
       if (!activeCase) {
-        // ALWAYS create a fresh, strictly isolated case for this submission.
-        // Multiple documents attached in this form will belong exclusively to this case.
+        // A fresh, isolated case for this submission.
         const memberIdToSend = isIdentity && isHead ? selectedFamilyMemberId : null
         activeCase = await createCase(values.caseType, token, memberIdToSend)
         setCreatedCase(activeCase)
@@ -504,7 +541,7 @@ export function NewCasePage() {
                                 </SelectItem>
                               </>
                             ) : (
-                              CASE_TYPES.filter((t) => !isIdentityCase(t)).map((type) => (
+                              CASE_TYPES.filter((t) => !isIdentityCase(t) && t !== "family_comparison").map((type) => (
                                 <SelectItem key={type} value={type}>
                                   {CASE_TYPE_LABELS[type]}
                                 </SelectItem>
@@ -560,6 +597,42 @@ export function NewCasePage() {
                       <p className="text-[11px] text-muted-foreground">
                         Submitting this bundle for a household member automatically runs cross-member consistency checks (identity, shared address, parent names, birth order).
                       </p>
+                    </div>
+                  )}
+
+                  {attachToExisting && existingBundleId && (
+                    <div
+                      role="status"
+                      className="rounded-xl border border-blue-200 bg-blue-50/80 p-3.5 text-xs text-blue-900 flex flex-col gap-1.5"
+                    >
+                      <p className="font-semibold">
+                        Adding to {existingBundleOwner ? `${existingBundleOwner}'s` : "this person's"} active profile
+                        {existingBundleNumber ? ` (${existingBundleNumber})` : ""}
+                      </p>
+                      <p>
+                        Every document you upload joins this person's bundle, and all of them are checked against each
+                        other for differences in name, date of birth, address or parent's name.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setSeparateBundle(true)}
+                        disabled={Boolean(createdCase && uploadedDocs.length > 0)}
+                        className="self-start underline font-medium hover:text-blue-950 disabled:opacity-50"
+                      >
+                        Create a separate bundle instead
+                      </button>
+                    </div>
+                  )}
+                  {isIdentity && separateBundle && existingBundleId && (
+                    <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs flex items-center justify-between gap-2">
+                      <span>A separate bundle will be created for this upload.</span>
+                      <button
+                        type="button"
+                        onClick={() => setSeparateBundle(false)}
+                        className="underline font-medium"
+                      >
+                        Add to the active profile instead
+                      </button>
                     </div>
                   )}
 

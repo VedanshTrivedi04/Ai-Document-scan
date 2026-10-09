@@ -92,6 +92,11 @@ class User(TenantScopedMixin, UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Enum(UserRole, name="user_role"), default=UserRole.user, nullable=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Set when a family head creates or resets this account: the person signs
+    # in with a temporary password and must choose their own.
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
 
     submitted_cases = relationship(
         "Case", back_populates="submitted_by", foreign_keys="Case.submitted_by_user_id"

@@ -17,10 +17,12 @@ const BulkUploadDetailPage = lazy(() => import("@/pages/BulkUploadDetailPage").t
 const BulkUploadsListPage = lazy(() => import("@/pages/BulkUploadsListPage").then((m) => ({ default: m.BulkUploadsListPage })))
 const BulkUploadPage = lazy(() => import("@/pages/BulkUploadPage").then((m) => ({ default: m.BulkUploadPage })))
 const CaseDetailPage = lazy(() => import("@/pages/CaseDetailPage").then((m) => ({ default: m.CaseDetailPage })))
+const ChangePasswordPage = lazy(() => import("@/pages/ChangePasswordPage").then((m) => ({ default: m.ChangePasswordPage })))
 const CaseFormPage = lazy(() => import("@/pages/CaseFormPage").then((m) => ({ default: m.CaseFormPage })))
 const CaseQueuePage = lazy(() => import("@/pages/CaseQueuePage").then((m) => ({ default: m.CaseQueuePage })))
 const DashboardPage = lazy(() => import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })))
 const FamilyPage = lazy(() => import("@/pages/FamilyPage").then((m) => ({ default: m.FamilyPage })))
+const FamilyComparisonPage = lazy(() => import("@/pages/FamilyComparisonPage").then((m) => ({ default: m.FamilyComparisonPage })))
 const MyCasesPage = lazy(() => import("@/pages/MyCasesPage").then((m) => ({ default: m.MyCasesPage })))
 const NewCasePage = lazy(() => import("@/pages/NewCasePage").then((m) => ({ default: m.NewCasePage })))
 const PlatformCompaniesPage = lazy(() => import("@/pages/PlatformCompaniesPage").then((m) => ({ default: m.PlatformCompaniesPage })))
@@ -77,6 +79,8 @@ function App() {
               <Route path="/my-cases" element={<MyCasesPage />} />
               <Route path="/family" element={<FamilyPage />} />
               <Route path="/families/:familyId" element={<FamilyPage />} />
+              <Route path="/family/compare/:caseId" element={<FamilyComparisonPage />} />
+              <Route path="/change-password" element={<ChangePasswordPage />} />
 
               {/* Governance & Audit History — accessible to users, reviewers and platform admins */}
               <Route path="/audit-history" element={<AuditHistoryPage />} />

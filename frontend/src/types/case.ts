@@ -13,6 +13,8 @@ export const CASE_TYPES = [
   "other",
   "identity_verification",
   "hiring_verification",
+  // A family head comparing members with each other (never picked in a form).
+  "family_comparison",
 ] as const
 
 export type CaseType = (typeof CASE_TYPES)[number]
@@ -27,6 +29,7 @@ export const CASE_TYPE_LABELS: Record<CaseType, string> = {
   other: "Other",
   identity_verification: "Identity verification",
   hiring_verification: "Hiring verification",
+  family_comparison: "Family comparison",
 }
 
 export function isIdentityCase(caseType: CaseType | string | null | undefined): boolean {
@@ -661,6 +664,9 @@ export interface CaseFamilyMember {
 }
 
 export interface CaseDetail extends CaseListItem {
+  /** May settle this case's profile conflicts and accept or dismiss its findings:
+   * a reviewer, the head of the case's family, or the submitter of a case outside any family. */
+  can_manage?: boolean
   family_member?: CaseFamilyMember | null
   documents: CaseDetailDocument[]
   forensic_findings: ForensicFinding[]

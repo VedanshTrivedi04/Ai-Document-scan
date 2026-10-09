@@ -20,6 +20,7 @@ import {
 
 import { reviewFinding } from "@/api/cases"
 import { Button } from "@/components/ui/button"
+import { FaceCropThumbnail } from "@/components/case/FaceCropThumbnail"
 import { PdfOverlayViewer, type OverlayColor } from "@/components/case/PdfOverlayViewer"
 import {
   DOCUMENT_TYPE_LABELS,
@@ -394,7 +395,7 @@ export function IdentityFindingsPanel({
   return (
     <div id="findings-panel" className="flex flex-col gap-4 font-sans">
       {/* ================= SUMMARY BANNER ================= */}
-      <div className="rounded-xl border border-border bg-card p-4 shadow-2xs">
+      <div className="rounded-xl border border-border bg-card/95 backdrop-blur-xs p-4 shadow-2xs sticky top-0 z-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             {isProcessing ? (
@@ -567,6 +568,7 @@ export function IdentityFindingsPanel({
                       <FindingCard
                         key={finding.id}
                         finding={finding}
+                        documents={documents}
                         catalog={catalog}
                         canReview={canReview}
                         isCaseDecided={isCaseDecided}
@@ -617,6 +619,7 @@ export function IdentityFindingsPanel({
  */
 function FindingCard({
   finding,
+  documents,
   catalog,
   canReview,
   isCaseDecided,
@@ -627,6 +630,7 @@ function FindingCard({
   onShowOnDocuments,
 }: {
   finding: CrossDocumentFinding
+  documents?: CaseDetailDocument[]
   catalog?: I18nCatalog | null
   canReview: boolean
   isCaseDecided: boolean
@@ -649,6 +653,9 @@ function FindingCard({
 
   const evA = finding.evidence?.[0]
   const evB = finding.evidence?.[1]
+
+  const docA = documents?.find((d) => d.id === evA?.document_id)
+  const docB = documents?.find((d) => d.id === evB?.document_id)
 
   const docTypeA = evA?.document_type
     ? (catalog?.documents?.[evA.document_type] ?? DOCUMENT_TYPE_LABELS[evA.document_type] ?? evA.document_type)
@@ -673,6 +680,9 @@ function FindingCard({
     setNoteText("")
     setShowNoteInput(false)
   }
+
+  const isPhotoField = finding.field_name === "photo"
+  const similarityScore = typeof finding.detail?.similarity === "number" ? finding.detail.similarity : undefined
 
   return (
     <div id={`finding-${finding.field_name}`} className="rounded-xl border border-border/80 bg-background p-4 flex flex-col gap-3.5 transition-all hover:border-border">
@@ -728,38 +738,127 @@ function FindingCard({
         </Button>
       </div>
 
-      {/* Side-by-Side Values */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg bg-muted/20 border border-border/60">
-        {/* Left Side: Document A */}
-        <div className="flex flex-col gap-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-foreground truncate" title={evA?.document_filename}>
-              {docTypeA}
-            </span>
-            {isSameDocType && evA?.document_filename && (
-              <span className="text-[11px] text-muted-foreground truncate">({evA.document_filename})</span>
-            )}
-          </div>
-          <div className="p-2 rounded bg-background border border-border/50">
-            <HighlightDiffWords value={evA?.value} otherValue={evB?.value} />
-          </div>
-        </div>
+      {/* Side-by-Side Values or Visual Face Photographs */}
+      {isPhotoField ? (
+        <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/60">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
+            {/* Left Side: Document A Portrait */}
+            <div className="flex flex-col items-center justify-between gap-2.5 p-3 rounded-lg bg-background border border-border/60 text-center">
+              <div className="flex flex-col items-center gap-0.5 w-full">
+                <span className="text-xs font-bold text-foreground truncate max-w-full" title={evA?.document_filename}>
+                  {docTypeA}
+                </span>
+                {evA?.document_filename && (
+                  <span className="text-[11px] text-muted-foreground truncate max-w-full">
+                    {evA.document_filename}
+                  </span>
+                )}
+              </div>
+              <FaceCropThumbnail
+                fileUrl={docA?.file_url}
+                originalFilename={docA?.original_filename}
+                contentType={docA?.content_type}
+                boundingBox={evA?.bounding_box}
+                alt={`${docTypeA} photograph`}
+                onClick={onShowOnDocuments}
+              />
+              <span className="text-[11px] text-muted-foreground font-medium">
+                {evA?.bounding_box ? "Extracted portrait" : "Photo not located"}
+              </span>
+            </div>
 
-        {/* Right Side: Document B */}
-        <div className="flex flex-col gap-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-foreground truncate" title={evB?.document_filename}>
-              {docTypeB}
-            </span>
-            {isSameDocType && evB?.document_filename && (
-              <span className="text-[11px] text-muted-foreground truncate">({evB.document_filename})</span>
-            )}
+            {/* Right Side: Document B Portrait */}
+            <div className="flex flex-col items-center justify-between gap-2.5 p-3 rounded-lg bg-background border border-border/60 text-center">
+              <div className="flex flex-col items-center gap-0.5 w-full">
+                <span className="text-xs font-bold text-foreground truncate max-w-full" title={evB?.document_filename}>
+                  {docTypeB}
+                </span>
+                {evB?.document_filename && (
+                  <span className="text-[11px] text-muted-foreground truncate max-w-full">
+                    {evB.document_filename}
+                  </span>
+                )}
+              </div>
+              <FaceCropThumbnail
+                fileUrl={docB?.file_url}
+                originalFilename={docB?.original_filename}
+                contentType={docB?.content_type}
+                boundingBox={evB?.bounding_box}
+                alt={`${docTypeB} photograph`}
+                onClick={onShowOnDocuments}
+              />
+              <span className="text-[11px] text-muted-foreground font-medium">
+                {evB?.bounding_box ? "Extracted portrait" : "Photo not located"}
+              </span>
+            </div>
           </div>
-          <div className="p-2 rounded bg-background border border-border/50">
-            <HighlightDiffWords value={evB?.value} otherValue={evA?.value} />
+
+          {/* Biometric similarity score badge */}
+          {similarityScore !== undefined && (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg bg-background border border-border/50 text-xs">
+              <span className="text-muted-foreground font-medium">Biometric Similarity:</span>
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "px-2.5 py-0.5 rounded-full font-bold text-[11px] inline-flex items-center gap-1",
+                    similarityScore >= 0.45
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                      : similarityScore < 0.25
+                      ? "bg-red-100 text-red-800 border border-red-200"
+                      : "bg-amber-100 text-amber-800 border border-amber-200"
+                  )}
+                >
+                  {similarityScore >= 0.45 ? (
+                    <CheckCircle2Icon className="size-3 text-emerald-600" />
+                  ) : (
+                    <AlertTriangleIcon className="size-3 text-amber-600" />
+                  )}
+                  {(similarityScore * 100).toFixed(1)}% match
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  {similarityScore >= 0.45
+                    ? "Face matches across documents"
+                    : similarityScore < 0.25
+                    ? "Different persons detected"
+                    : "Uncertain similarity - review required"}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg bg-muted/20 border border-border/60">
+          {/* Left Side: Document A */}
+          <div className="flex flex-col gap-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-foreground truncate" title={evA?.document_filename}>
+                {docTypeA}
+              </span>
+              {isSameDocType && evA?.document_filename && (
+                <span className="text-[11px] text-muted-foreground truncate">({evA.document_filename})</span>
+              )}
+            </div>
+            <div className="p-2 rounded bg-background border border-border/50">
+              <HighlightDiffWords value={evA?.value} otherValue={evB?.value} />
+            </div>
+          </div>
+
+          {/* Right Side: Document B */}
+          <div className="flex flex-col gap-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-foreground truncate" title={evB?.document_filename}>
+                {docTypeB}
+              </span>
+              {isSameDocType && evB?.document_filename && (
+                <span className="text-[11px] text-muted-foreground truncate">({evB.document_filename})</span>
+              )}
+            </div>
+            <div className="p-2 rounded bg-background border border-border/50">
+              <HighlightDiffWords value={evB?.value} otherValue={evA?.value} />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Multilingual Structured Message (summary, explanation, action as 3 separate lines) */}
       {finding.message ? (
@@ -1033,6 +1132,21 @@ function SideBySideCompareModal({
               <SeverityScoreBadge score={findingScore} />
               <span className="text-sm font-bold text-foreground">{fieldLabel}</span>
 
+              {finding.field_name === "photo" && typeof finding.detail?.similarity === "number" && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold",
+                    finding.detail.similarity >= 0.45
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                      : finding.detail.similarity < 0.25
+                      ? "bg-red-100 text-red-800 border border-red-200"
+                      : "bg-amber-100 text-amber-800 border border-amber-200"
+                  )}
+                >
+                  {(finding.detail.similarity * 100).toFixed(1)}% Biometric Match
+                </span>
+              )}
+
               {isReviewed && (
                 <span
                   className={cn(
@@ -1125,15 +1239,27 @@ function SideBySideCompareModal({
           {/* Left Pane: Document A */}
           <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3 shadow-2xs">
             <div className="flex items-center justify-between pb-2 border-b border-border/60">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-foreground">{docTypeA}</span>
-                <span className="text-[11px] text-muted-foreground font-mono truncate" title={evA?.document_filename}>
-                  {evA?.document_filename}
-                </span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                {finding.field_name === "photo" && evA?.bounding_box && (
+                  <FaceCropThumbnail
+                    fileUrl={docA?.file_url}
+                    originalFilename={docA?.original_filename}
+                    contentType={docA?.content_type}
+                    boundingBox={evA?.bounding_box}
+                    size="sm"
+                    className="w-11 h-14 shrink-0 rounded-md shadow-2xs"
+                  />
+                )}
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-bold text-foreground">{docTypeA}</span>
+                  <span className="text-[11px] text-muted-foreground font-mono truncate" title={evA?.document_filename}>
+                    {evA?.document_filename}
+                  </span>
+                </div>
               </div>
               <div className="text-right">
                 <span className="text-[11px] font-semibold text-primary block">
-                  {evA?.value || "Not found"}
+                  {finding.field_name === "photo" ? "Face detected" : (evA?.value || "Not found")}
                 </span>
                 {!evA?.bounding_box && (
                   <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -1161,15 +1287,27 @@ function SideBySideCompareModal({
           {/* Right Pane: Document B */}
           <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3 shadow-2xs">
             <div className="flex items-center justify-between pb-2 border-b border-border/60">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-foreground">{docTypeB}</span>
-                <span className="text-[11px] text-muted-foreground font-mono truncate" title={evB?.document_filename}>
-                  {evB?.document_filename}
-                </span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                {finding.field_name === "photo" && evB?.bounding_box && (
+                  <FaceCropThumbnail
+                    fileUrl={docB?.file_url}
+                    originalFilename={docB?.original_filename}
+                    contentType={docB?.content_type}
+                    boundingBox={evB?.bounding_box}
+                    size="sm"
+                    className="w-11 h-14 shrink-0 rounded-md shadow-2xs"
+                  />
+                )}
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-bold text-foreground">{docTypeB}</span>
+                  <span className="text-[11px] text-muted-foreground font-mono truncate" title={evB?.document_filename}>
+                    {evB?.document_filename}
+                  </span>
+                </div>
               </div>
               <div className="text-right">
                 <span className="text-[11px] font-semibold text-primary block">
-                  {evB?.value || "Not found"}
+                  {finding.field_name === "photo" ? "Face detected" : (evB?.value || "Not found")}
                 </span>
                 {!evB?.bounding_box && (
                   <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">

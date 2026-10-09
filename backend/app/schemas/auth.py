@@ -29,6 +29,11 @@ class TokenResponse(BaseModel):
         default=None,
         description="The subdomain of the user's organisation, if it has one: where this sign-in belongs.",
     )
+    must_change_password: bool = Field(
+        default=False,
+        description="True when the account has a temporary password (set by a family head): "
+        "send the person to change it (POST /auth/me/password) before anything else.",
+    )
 
 
 class CurrentUserResponse(BaseModel):
@@ -44,6 +49,7 @@ class CurrentUserResponse(BaseModel):
     company_id: uuid.UUID | None = Field(description="The user's company; null for a platform admin.")
     company_name: str | None = Field(description="Display name of the user's company.")
     company_subdomain: str | None = Field(default=None, description="The company's subdomain, if it has one.")
+    must_change_password: bool = Field(default=False, description="See TokenResponse.must_change_password.")
 
 
 class UploadLimitsResponse(BaseModel):

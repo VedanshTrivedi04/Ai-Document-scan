@@ -190,10 +190,10 @@ export function CaseDetailPage() {
     },
   })
 
-  // For normal citizen portal (localhost / non-org):
-  // The submitter acts as the family head. They can review and resolve profile choices for their family members,
-  // while the corporate reviewer decision panel (approve/reject/escalate) is hidden.
-  const isFamilyHead = Boolean(user && caseDetail?.submitted_by?.id === user.id)
+  // The backend says who may settle conflicts: a reviewer, the head of the case's family, or the
+  // submitter of a case outside any family. A family member signed in on their own may not.
+  // The corporate decision panel (approve/reject/escalate) stays hidden outside reviewers.
+  const canManage = Boolean(caseDetail?.can_manage)
 
   const { data: auditLog, isLoading: isAuditLoading } = useQuery({
     queryKey: ["caseAuditLog", caseId, token],
@@ -237,6 +237,13 @@ export function CaseDetailPage() {
   const [uploadError, setUploadError] = React.useState<string | null>(null)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false)
   const navigate = useNavigate()
+
+  // A family comparison has its own screen.
+  React.useEffect(() => {
+    if (caseDetail?.case_type === "family_comparison") {
+      navigate(`/family/compare/${caseDetail.id}`, { replace: true })
+    }
+  }, [caseDetail?.case_type, caseDetail?.id, navigate])
 
   const deleteMutation = useMutation({
     mutationFn: () => {
@@ -482,9 +489,9 @@ export function CaseDetailPage() {
 
         {isIdentity ? (
           /* ================= IDENTITY CASE 2-COLUMN LAYOUT ================= */
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
             {/* LEFT COLUMN: ~60% (col-span-7) Document Tabs + Viewer */}
-            <div className="lg:col-span-7 flex flex-col gap-3 min-w-0">
+            <div className="lg:col-span-7 flex flex-col gap-3 min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100vh-100px)] lg:overflow-y-auto custom-scrollbar">
               {/* Document Tabs across the top with conflict badges */}
               <div className="bg-white rounded-xl border border-slate-200/80 p-2.5 shadow-2xs">
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth">
@@ -638,8 +645,8 @@ export function CaseDetailPage() {
               )}
             </div>
 
-            {/* RIGHT COLUMN: ~40% (col-span-5) Identity Findings + Person Details Panel */}
-            <div className="lg:col-span-5 flex flex-col gap-5 min-w-0">
+            {/* RIGHT COLUMN: ~40% (col-span-5) Identity Findings + Person Details Panel with independent scroll */}
+            <div className="lg:col-span-5 flex flex-col gap-5 min-w-0 lg:max-h-[calc(100vh-100px)] lg:overflow-y-auto lg:pr-2 custom-scrollbar">
               {/* Household context banner if case is linked to a family member */}
               {caseDetail?.family_member && (
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-blue-50/60 border border-blue-200/80 text-xs text-foreground">
@@ -671,7 +678,7 @@ export function CaseDetailPage() {
                 documents={documents}
                 isProcessing={!caseDetail?.pipeline.complete}
                 caseId={caseDetail?.id}
-                canAct={caseDetail?.can_act}
+                canAct={Boolean(caseDetail?.can_act || canManage)}
                 caseStatus={caseDetail?.status}
                 findingCounts={caseDetail?.finding_counts}
                 catalog={catalog}
@@ -717,7 +724,7 @@ export function CaseDetailPage() {
                   profile={caseProfile}
                   isLoading={isProfileLoading}
                   caseId={caseId!}
-                  canAct={caseDetail?.can_act || isFamilyHead}
+                  canAct={Boolean(caseDetail?.can_act || canManage)}
                   caseStatus={caseDetail?.status}
                   documents={documents}
                   catalog={catalog}

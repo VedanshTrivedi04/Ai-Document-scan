@@ -53,6 +53,8 @@ export interface TokenResponse {
   access_token: string
   token_type: string
   company_subdomain?: string | null
+  /** True when the account has a temporary password (set by a family head). */
+  must_change_password?: boolean
 }
 
 export interface CurrentUser {
@@ -66,4 +68,5 @@ export interface CurrentUser {
   company_id: string | null
   company_name: string | null
   company_subdomain?: string | null
+  must_change_password?: boolean
 }

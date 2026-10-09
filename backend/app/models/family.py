@@ -2,8 +2,9 @@
 `families` and `family_members`: a household whose documents one person, the
 head, submits and manages.
 
-The head is a user of the company; the other members are not users and have
-no sign-in. Each identity case can belong to one member
+The head is a user of the company. Another member may also have a sign-in of
+their own (`family_members.user_id`), created by the head; without one, the
+member has no sign-in and the head submits for them. Each identity case can belong to one member
 (`cases.family_member_id`), so a family is a set of people each with their
 own document bundle. The head is also a member, with relation `self`.
 """
@@ -48,6 +49,12 @@ class FamilyMember(TenantScopedMixin, UUIDPrimaryKeyMixin, TimestampMixin, Base)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     relation: Mapped[str] = mapped_column(String(16), nullable=False)
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    # The member's own sign-in, when the head created one (the head's own entry
+    # points at the head). A user is linked to at most one member.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, unique=True
+    )
 
     family = relationship("Family", back_populates="members")
     cases = relationship("Case", back_populates="family_member", order_by="Case.created_at")

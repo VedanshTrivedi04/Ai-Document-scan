@@ -16,11 +16,11 @@ escalate) live in app/api/case_actions.py.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, case as sql_case, false, func, select
+from sqlalchemy import and_, case as sql_case, false, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.auth import get_tenant_db, require_company_role
-from app.api.case_access import can_act_on_case, load_visible_case
+from app.api.case_access import can_act_on_case, can_manage_case, load_visible_case
 from app.api.tenant_access import CaseScope, CompanyScope, company_scope, get_case_scope
 from app.models.audit_log import AuditLog
 from app.models.case import Case, CaseStatus, CaseTier, CaseType, is_identity_case_type
@@ -108,13 +108,27 @@ def create_case(
     current_user: User = Depends(require_company_role(UserRole.user)),
     db: Session = Depends(get_tenant_db),
 ) -> Case:
-    if payload.family_member_id is not None:
+    if payload.case_type == CaseType.family_comparison:
+        raise HTTPException(422, "Family comparisons are created with POST /family/comparisons.")
+    family_member_id = payload.family_member_id
+    own_member_id = db.execute(
+        select(FamilyMember.id).where(
+            FamilyMember.user_id == current_user.id, FamilyMember.company_id == current_user.company_id
+        )
+    ).scalar_one_or_none()
+    if own_member_id is not None:
+        # A member with a sign-in of their own submits only for themselves.
+        if family_member_id not in (None, own_member_id):
+            raise HTTPException(422, "You can only submit documents for yourself.")
+        if is_identity_case_type(payload.case_type):
+            family_member_id = own_member_id
+    elif family_member_id is not None:
         # Only the head of the family submits for its members.
         owned = db.execute(
             select(FamilyMember.id)
             .join(Family, Family.id == FamilyMember.family_id)
             .where(
-                FamilyMember.id == payload.family_member_id,
+                FamilyMember.id == family_member_id,
                 FamilyMember.company_id == current_user.company_id,
                 Family.head_user_id == current_user.id,
             )
@@ -128,7 +142,7 @@ def create_case(
     case = Case(
         id=case_id,
         company_id=current_user.company_id,
-        family_member_id=payload.family_member_id,
+        family_member_id=family_member_id,
         # Derived from the case's own id, so it's unique for free and needs
         # no separate sequence/counter table.
         case_number=f"CASE-{case_id.hex[:8].upper()}",
@@ -150,7 +164,7 @@ def create_case(
         actor_user_id=current_user.id,
         event_data={
             "case_type": payload.case_type.value,
-            **({"family_member_id": str(payload.family_member_id)} if payload.family_member_id else {}),
+            **({"family_member_id": str(family_member_id)} if family_member_id else {}),
         },
     )
     record_case_created(db, current_user.company_id)
@@ -206,7 +220,17 @@ def list_cases(
         )
     stmt = stmt.order_by(Case.created_at.desc())
     if current_user.role == UserRole.user:
-        stmt = stmt.where(Case.submitted_by_user_id == current_user.id)
+        # Their own cases, the cases of a family they head, and the cases about them
+        # when they are a family member with a sign-in of their own.
+        headed = select(Family.id).where(Family.head_user_id == current_user.id)
+        stmt = stmt.where(
+            or_(
+                Case.submitted_by_user_id == current_user.id,
+                Case.family_id.in_(headed),
+                Case.family_member_id.in_(select(FamilyMember.id).where(FamilyMember.family_id.in_(headed))),
+                Case.family_member_id.in_(select(FamilyMember.id).where(FamilyMember.user_id == current_user.id)),
+            )
+        )
     if actionable:
         if current_user.role == UserRole.user or current_user.is_platform_admin:
             stmt = stmt.where(false())
@@ -355,6 +379,7 @@ def get_case_detail(
             current_user, CaseFlagSchema.from_case_flag(get_case_flag(db, case.company_id, case.id))
         ),
         can_act=can_act_on_case(current_user, case),
+        can_manage=can_manage_case(db, current_user, case),
         family_member=(
             CaseFamilyMember(
                 id=case.family_member.id,

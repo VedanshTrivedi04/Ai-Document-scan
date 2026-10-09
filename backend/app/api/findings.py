@@ -16,11 +16,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_tenant_db, require_company_role
-from app.api.case_access import ensure_can_act, scoped_company_id
+from app.api.case_access import ensure_can_act, ensure_can_manage_case, scoped_company_id
 from app.models.base import utcnow
 from app.models.case import Case, CaseStatus
 from app.models.cross_document_finding import REVIEW_PENDING, CrossDocumentFinding
-from app.models.user import User, UserRole, role_label
+from app.models.user import User, UserRole, has_rank, role_label
 from app.schemas.case import (
     CrossDocumentFindingSummary,
     FindingCounts,
@@ -61,14 +61,18 @@ def review_finding(
     finding_id: uuid.UUID,
     payload: FindingReviewRequest,
     lang: str = Query(default="en", description="Language of the returned finding's `message`."),
-    actor: User = Depends(_reviewer),
+    actor: User = Depends(require_company_role(UserRole.user)),
     db: Session = Depends(get_tenant_db),
 ) -> FindingReviewResponse:
     company_id = scoped_company_id(db)
     case = db.execute(select(Case).where(Case.id == case_id, Case.company_id == company_id)).scalar_one_or_none()
     if case is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
-    ensure_can_act(actor, case)
+    # A company reviewer (subject to the case's tier), or the head of the case's family.
+    if has_rank(actor.role, UserRole.reviewer_l1):
+        ensure_can_act(actor, case)
+    else:
+        ensure_can_manage_case(db, actor, case, "review these findings")
     if case.status in _DECIDED_CASE:
         raise HTTPException(
             status.HTTP_409_CONFLICT,

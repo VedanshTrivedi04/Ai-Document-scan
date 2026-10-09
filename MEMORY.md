@@ -1226,9 +1226,35 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Status: Complete
 
 
+---
+
+### 2026-10-10
+
+**User Request**
+> "isko implement kar do" (family head creates member logins, manages members documents, compares via a case; recommended defaults chosen)
+
+**Work Done (Phase 9A only; 9B and 9C wait for the owner go)**
+- `family_members.user_id`, `users.must_change_password` (migration `a8e2c4f6b1d9`).
+- `app/api/families.py`: login on `POST /family/members`, plus create / reset-password / on-off / remove endpoints. Users are written through the platform session (tenant role has SELECT only on `users`).
+- `/auth/login`, `/auth/me` return `must_change_password`; `POST /cases` auto-links a member own case.
+- Tests: `backend/tests/test_family_member_login.py` (13 pass). Contract in `docs/DEVELOPMENT_PHASES.md` Phase 9A.
+- Full suite: 6 failures, none in files touched here (audit-log stale test, document processing x3, identity intake, subdomain base_domain). Not checked against a clean checkout.
+- Not verified: the migration on PostgreSQL; the two-session user write under real RLS.
 
 
+---
 
+### 2026-10-10 (continued)
 
+**User Request**
+> "frontend bhi tum hi bana do and also now dont stop until it will complete"
 
-
+**Work Done: Phases 9B, 9C and the whole frontend**
+- 9B: head manages members cases (`can_manage_case` in `app/api/case_access.py`; profile PUT and finding PATCH allow the head; member sees only own). `GET /family/me`.
+- 9C: `family_comparison` case type, `app/api/family_comparisons.py`, migration `b9f3d5a7c1e2`. Conflicts are stored as findings; decisions survive a refresh.
+- Frontend: forced password change page, sign-in management and one-time credentials on the family page, member home, compare panel, comparison page, documents per member, NewCasePage joins the existing bundle. Contract in `docs/DEVELOPMENT_PHASES.md` (Phases 9A to 9 frontend).
+- Migrations `a8e2c4f6b1d9` and `b9f3d5a7c1e2` were applied to the Neon database by recreating the Docker stack (`docker compose down` then `up -d --build`; a rename conflict forced the `down`).
+- Checked: backend tests for the new files pass; API smoke (33 checks) and browser check (16 checks) against the live stack; real OCR and LLM pipeline on the synthetic family F01 (head settles a child conflict, comparison then runs).
+- Fake accounts from those checks remain in the database (emails starting `e2e.`, `ui.`, `real.`, `dbg.` at example.com).
+- Pre-existing, not fixed: `react-hooks/rules-of-hooks` lint error in `CaseDetailPage.tsx` (useMemo after an early return); stale test `test_audit_log_is_not_available_to_submitters`; `npm install` is needed for `gsap` and `lenis` (declared, missing from the lockfile).
+- Not built: changing the head, a member leaving the family, reusing the email of a removed sign-in, notifications.

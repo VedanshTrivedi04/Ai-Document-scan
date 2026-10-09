@@ -24,5 +24,10 @@ export function ProtectedRoute() {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />
   }
 
+  // A temporary password (set by a family head) must be replaced before anything else.
+  if (user.must_change_password && location.pathname !== "/change-password") {
+    return <Navigate to="/change-password" replace />
+  }
+
   return <Outlet />
 }

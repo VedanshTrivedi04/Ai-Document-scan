@@ -1,13 +1,15 @@
 import * as React from "react"
 import { Loader2Icon, UserPlusIcon, XIcon } from "lucide-react"
 
+import { MemberCredentialsDialog } from "@/components/family/MemberCredentialsDialog"
 import { Button } from "@/components/ui/button"
-import type { MemberCreatePayload } from "@/types/family"
+import { FieldError, invalidFieldClass } from "@/components/ui/field-error"
+import type { FamilyView, MemberCreatePayload } from "@/types/family"
 
 interface AddMemberModalProps {
   isOpen: boolean
   onClose: () => void
-  onAdd: (payload: MemberCreatePayload) => Promise<void>
+  onAdd: (payload: MemberCreatePayload) => Promise<FamilyView | void>
   isSubmitting?: boolean
   currentLang?: string
 }
@@ -25,6 +27,13 @@ const MODAL_I18N: Record<string, Record<string, string>> = {
     add: "Add member",
     name_required: "Full name is required",
     relation_required: "Please select a relation",
+    create_login: "Create a sign-in for this person",
+    create_login_help: "They can sign in with their own account and see only their own documents. You still manage everything.",
+    login_email: "Their email",
+    login_password: "Password (optional)",
+    login_password_help: "Leave empty to generate a temporary one. They must change it at first sign-in.",
+    email_invalid: "Enter a valid email address.",
+    password_short: "Use at least 8 characters, or leave it empty.",
   },
   hi: {
     title: "परिवार का सदस्य जोड़ें",
@@ -38,8 +47,17 @@ const MODAL_I18N: Record<string, Record<string, string>> = {
     add: "सदस्य जोड़ें",
     name_required: "पूरा नाम आवश्यक है",
     relation_required: "कृपया संबंध चुनें",
+    create_login: "इस व्यक्ति के लिए साइन-इन बनाएँ",
+    create_login_help: "वे अपने अकाउंट से साइन-इन करके केवल अपने दस्तावेज़ देख सकेंगे। सब कुछ आप ही संभालेंगे।",
+    login_email: "उनका ईमेल",
+    login_password: "पासवर्ड (वैकल्पिक)",
+    login_password_help: "खाली छोड़ें तो अस्थायी पासवर्ड बन जाएगा। पहली बार साइन-इन पर उन्हें इसे बदलना होगा।",
+    email_invalid: "सही ईमेल पता लिखें।",
+    password_short: "कम से कम 8 अक्षर रखें, या खाली छोड़ें।",
   },
 }
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const RELATION_OPTIONS = [
   { value: "spouse", label: "Spouse (पति / पत्नी)" },
@@ -65,12 +83,22 @@ function AddMemberDialogInner({
   const [relation, setRelation] = React.useState<MemberCreatePayload["relation"]>("spouse")
   const [dateOfBirth, setDateOfBirth] = React.useState("")
   const [error, setError] = React.useState<string | null>(null)
+  const [withLogin, setWithLogin] = React.useState(false)
+  const [loginEmail, setLoginEmail] = React.useState("")
+  const [loginPassword, setLoginPassword] = React.useState("")
+  const [submitted, setSubmitted] = React.useState(false)
+  const [created, setCreated] = React.useState<FamilyView["credentials"] | null>(null)
 
   const langKey = currentLang === "hi" ? "hi" : "en"
   const t = MODAL_I18N[langKey] ?? MODAL_I18N.en
 
+  const emailError = withLogin && !EMAIL_PATTERN.test(loginEmail.trim()) ? t.email_invalid : null
+  const passwordError = withLogin && loginPassword && loginPassword.length < 8 ? t.password_short : null
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setSubmitted(true)
+    if (emailError || passwordError) return
     if (!fullName.trim()) {
       setError(t.name_required)
       return
@@ -82,15 +110,33 @@ function AddMemberDialogInner({
 
     try {
       setError(null)
-      await onAdd({
+      const view = await onAdd({
         full_name: fullName.trim(),
         relation,
         date_of_birth: dateOfBirth || null,
+        ...(withLogin
+          ? { login: { email: loginEmail.trim(), password: loginPassword || undefined } }
+          : {}),
       })
+      if (view && "credentials" in view && view.credentials) {
+        setCreated(view.credentials)
+        return
+      }
       onClose()
     } catch (err: any) {
       setError(err?.message || "Failed to add member")
     }
+  }
+
+  if (created) {
+    return (
+      <MemberCredentialsDialog
+        credentials={created}
+        memberName={fullName.trim()}
+        onClose={onClose}
+        currentLang={currentLang}
+      />
+    )
   }
 
   return (
@@ -119,7 +165,7 @@ function AddMemberDialogInner({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 text-xs">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3.5 text-xs">
           {/* Full Name */}
           <div className="flex flex-col gap-1">
             <label className="font-semibold text-foreground">
@@ -165,6 +211,55 @@ function AddMemberDialogInner({
               onChange={(e) => setDateOfBirth(e.target.value)}
               className="px-3 py-2 rounded-xl border border-border bg-background text-foreground text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs"
             />
+          </div>
+
+          {/* Optional sign-in for this member */}
+          <div className="rounded-xl border border-border/80 bg-muted/20 p-3 flex flex-col gap-2.5">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={withLogin}
+                onChange={(e) => setWithLogin(e.target.checked)}
+                className="mt-0.5 size-3.5 accent-primary"
+              />
+              <span>
+                <span className="font-semibold text-foreground block">{t.create_login}</span>
+                <span className="text-[11px] text-muted-foreground">{t.create_login_help}</span>
+              </span>
+            </label>
+            {withLogin && (
+              <div className="flex flex-col gap-2.5 pl-5">
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="add-member-login-email" className="font-semibold text-foreground">
+                    {t.login_email}
+                  </label>
+                  <input
+                    id="add-member-login-email"
+                    type="email"
+                    autoComplete="off"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    className={`px-3 py-2 rounded-xl border border-border bg-background text-foreground text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs ${submitted && emailError ? invalidFieldClass : ""}`}
+                  />
+                  <FieldError id="add-member-login-email-error" message={submitted ? emailError : null} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="add-member-login-password" className="font-semibold text-foreground">
+                    {t.login_password}
+                  </label>
+                  <input
+                    id="add-member-login-password"
+                    type="text"
+                    autoComplete="off"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className={`px-3 py-2 rounded-xl border border-border bg-background text-foreground text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs ${submitted && passwordError ? invalidFieldClass : ""}`}
+                  />
+                  <p className="text-[11px] text-muted-foreground">{t.login_password_help}</p>
+                  <FieldError id="add-member-login-password-error" message={submitted ? passwordError : null} />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Actions */}

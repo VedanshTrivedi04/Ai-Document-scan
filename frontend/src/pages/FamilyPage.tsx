@@ -7,29 +7,45 @@ import {
   UserPlusIcon,
   UsersIcon,
 } from "lucide-react"
-import { useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
+
+import { ApiError } from "@/api/client"
 
 import { getLanguages } from "@/api/i18n"
 import {
   addFamilyMember,
+  createComparison,
   createFamily,
+  createMemberLogin,
   getFamilyById,
   getMyFamily,
+  getMyMembership,
+  listComparisons,
   removeFamilyMember,
+  removeMemberLogin,
+  resetMemberPassword,
+  setMemberLoginActive,
   updateFamilyMember,
 } from "@/api/family"
 import { AddMemberModal } from "@/components/family/AddMemberModal"
 import { CreateFamilyCard } from "@/components/family/CreateFamilyCard"
 import { EditMemberModal } from "@/components/family/EditMemberModal"
 import { FamilyChecksPanel } from "@/components/family/FamilyChecksPanel"
+import { FamilyComparePanel } from "@/components/family/FamilyComparePanel"
 import { FamilyMembersList } from "@/components/family/FamilyMembersList"
+import { MemberCredentialsDialog } from "@/components/family/MemberCredentialsDialog"
+import { MemberHome } from "@/components/family/MemberHome"
+import { MemberLoginDialog } from "@/components/family/MemberLoginDialog"
 import { Button } from "@/components/ui/button"
 import { Nav } from "@/design-system/Nav"
 import { useAuth } from "@/hooks/useAuth"
 import type {
   FamilyCreatePayload,
   FamilyMember,
+  FamilyView,
   MemberCreatePayload,
+  MemberCredentials,
+  MemberLoginPayload,
   MemberUpdatePayload,
 } from "@/types/family"
 
@@ -56,6 +72,7 @@ export function FamilyPage() {
   const { familyId } = useParams<{ familyId?: string }>()
   const { token, user } = useAuth()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const [currentLang, setCurrentLang] = React.useState<string>(() => {
     try {
@@ -88,6 +105,10 @@ export function FamilyPage() {
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
   const [editingMember, setEditingMember] = React.useState<FamilyMember | null>(null)
   const [removingMemberId, setRemovingMemberId] = React.useState<string | null>(null)
+  const [loginForMember, setLoginForMember] = React.useState<FamilyMember | null>(null)
+  const [credentialsShown, setCredentialsShown] = React.useState<{ credentials: MemberCredentials; name: string } | null>(null)
+  const [busyLoginId, setBusyLoginId] = React.useState<string | null>(null)
+  const [actionError, setActionError] = React.useState<string | null>(null)
 
   // Fetch Family View
   const isSpecificFamily = Boolean(familyId)
@@ -109,6 +130,55 @@ export function FamilyPage() {
     enabled: Boolean(token && (!isPlatformAdmin || isSpecificFamily)),
   })
 
+  // A family member with a sign-in of their own sees only their own part.
+  const { data: membership, isLoading: isLoadingMembership } = useQuery({
+    queryKey: ["family", "membership", token],
+    queryFn: () => getMyMembership(token as string),
+    enabled: Boolean(token && !isPlatformAdmin && !isSpecificFamily),
+  })
+
+  const isMyFamilyHead = Boolean(familyData && user && String(familyData.head_user_id) === String(user.id))
+  const { data: comparisons = [] } = useQuery({
+    queryKey: ["familyComparisons", token],
+    queryFn: () => listComparisons(token as string),
+    enabled: Boolean(token && isMyFamilyHead && !isSpecificFamily),
+  })
+
+  // The response that carries one-time credentials must not stay in the cache.
+  const keepFamily = (updated: FamilyView): FamilyView => {
+    const { credentials: _shownOnce, ...rest } = updated
+    queryClient.setQueryData(["family", isSpecificFamily ? familyId : "mine", currentLang, token], rest)
+    void queryClient.invalidateQueries({ queryKey: ["family"] })
+    return rest as FamilyView
+  }
+
+  const runLoginAction = async (member: FamilyMember, action: () => Promise<FamilyView>, showName = true) => {
+    setBusyLoginId(member.id)
+    setActionError(null)
+    try {
+      const updated = await action()
+      if (updated.credentials && showName) {
+        setCredentialsShown({ credentials: updated.credentials, name: member.full_name })
+      }
+      keepFamily(updated)
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.")
+    } finally {
+      setBusyLoginId(null)
+    }
+  }
+
+  const compareMutation = useMutation({
+    mutationFn: (memberIds: string[]) => {
+      if (!token) throw new Error("Missing auth token")
+      return createComparison(memberIds, currentLang, token)
+    },
+    onSuccess: (created) => {
+      void queryClient.invalidateQueries({ queryKey: ["familyComparisons"] })
+      navigate(`/family/compare/${created.id}`)
+    },
+  })
+
   // Mutations
   const createMutation = useMutation({
     mutationFn: (payload: FamilyCreatePayload) => {
@@ -127,8 +197,7 @@ export function FamilyPage() {
       return addFamilyMember(payload, currentLang, token)
     },
     onSuccess: (updated) => {
-      queryClient.setQueryData(["family", isSpecificFamily ? familyId : "mine", currentLang, token], updated)
-      queryClient.invalidateQueries({ queryKey: ["family"] })
+      keepFamily(updated)
     },
   })
 
@@ -162,7 +231,7 @@ export function FamilyPage() {
     familyData && user && String(familyData.head_user_id) === String(user.id)
   )
 
-  if (isLoading) {
+  if (isLoading || (!familyData && !isSpecificFamily && !isPlatformAdmin && isLoadingMembership)) {
     return (
       <div className="min-h-screen flex flex-col font-sans bg-[#F1F5FA] text-slate-900">
         <Nav active="family" />
@@ -198,6 +267,16 @@ export function FamilyPage() {
             Platform administrators do not have a personal family view. To inspect a household, open a case or view a family using its ID.
           </p>
         </main>
+      </div>
+    )
+  }
+
+  // A member with a sign-in of their own: only their own documents.
+  if (!familyData && !isSpecificFamily && membership) {
+    return (
+      <div className="min-h-screen flex flex-col font-sans bg-[#F1F5FA] text-slate-900">
+        <Nav active="family" />
+        <MemberHome membership={membership} />
       </div>
     )
   }
@@ -311,6 +390,32 @@ export function FamilyPage() {
           </div>
         )}
 
+        {actionError && (
+          <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {actionError}
+          </div>
+        )}
+
+        {/* Compare members with each other (head only) */}
+        {isHead && !isSpecificFamily && (
+          <FamilyComparePanel
+            members={familyData.members}
+            comparisons={comparisons}
+            onCompare={async (ids) => {
+              await compareMutation.mutateAsync(ids).catch(() => undefined)
+            }}
+            isComparing={compareMutation.isPending}
+            error={
+              compareMutation.error
+                ? compareMutation.error instanceof ApiError
+                  ? compareMutation.error.message
+                  : "Could not run the comparison."
+                : null
+            }
+            currentLang={currentLang}
+          />
+        )}
+
         {/* Household Level Checks */}
         <FamilyChecksPanel
           checks={familyData.checks}
@@ -328,16 +433,48 @@ export function FamilyPage() {
           }}
           isRemovingId={removingMemberId}
           currentLang={currentLang}
+          onCreateLogin={(m) => setLoginForMember(m)}
+          onResetPassword={(m) =>
+            runLoginAction(m, () => resetMemberPassword(m.id, {}, currentLang, token as string))
+          }
+          onToggleLogin={(m, isActive) =>
+            runLoginAction(m, () => setMemberLoginActive(m.id, isActive, currentLang, token as string), false)
+          }
+          onRemoveLogin={(m) => runLoginAction(m, () => removeMemberLogin(m.id, currentLang, token as string), false)}
+          busyLoginId={busyLoginId}
         />
       </main>
+
+      {/* Create a sign-in for an existing member */}
+      <MemberLoginDialog
+        member={loginForMember}
+        onClose={() => setLoginForMember(null)}
+        onCreate={async (memberId: string, payload: MemberLoginPayload) => {
+          const updated = await createMemberLogin(memberId, payload, currentLang, token as string)
+          if (updated.credentials && loginForMember) {
+            setCredentialsShown({ credentials: updated.credentials, name: loginForMember.full_name })
+          }
+          keepFamily(updated)
+          setLoginForMember(null)
+        }}
+        currentLang={currentLang}
+      />
+
+      {/* Shown once after a sign-in is created or a password reset */}
+      {credentialsShown && (
+        <MemberCredentialsDialog
+          credentials={credentialsShown.credentials}
+          memberName={credentialsShown.name}
+          onClose={() => setCredentialsShown(null)}
+          currentLang={currentLang}
+        />
+      )}
 
       {/* Add Member Modal */}
       <AddMemberModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onAdd={async (payload) => {
-          await addMemberMutation.mutateAsync(payload)
-        }}
+        onAdd={(payload) => addMemberMutation.mutateAsync(payload)}
         isSubmitting={addMemberMutation.isPending}
         currentLang={currentLang}
       />

@@ -71,6 +71,9 @@ class CaseType(str, enum.Enum):
     # documents (app/services/identity_documents.py) instead of for forgery.
     identity_verification = "identity_verification"
     hiring_verification = "hiring_verification"
+    # The head of a family comparing members' verified details with each other
+    # (app/api/family_comparisons.py). Holds no documents of its own.
+    family_comparison = "family_comparison"
 
 
 IDENTITY_CASE_TYPES = frozenset({CaseType.identity_verification, CaseType.hiring_verification})
@@ -125,6 +128,14 @@ class Case(TenantScopedMixin, UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # the case was submitted for one.
     family_member_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("family_members.id"), nullable=True, index=True
+    )
+    # Family comparison cases: the family compared, and which members
+    # (their ids as strings, the head included).
+    family_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("families.id"), nullable=True, index=True
+    )
+    comparison_member_ids: Mapped[list | None] = mapped_column(
+        JSONB().with_variant(JSON(), "sqlite"), nullable=True
     )
 
     submitted_by = relationship(

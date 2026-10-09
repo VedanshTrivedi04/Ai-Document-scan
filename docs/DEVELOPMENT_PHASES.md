@@ -369,3 +369,79 @@ When families exist, a member's profile is the profile of that member's case.
 - `backend/scripts/demo_identity_bundles.py`: the detector, profile, forms and
   family checks on the synthetic bundles, in a terminal, with no database or
   cloud key.
+
+## Phase 9A — Family member sign-in (done)
+
+A family head can give a member a sign-in. Migration `a8e2c4f6b1d9`
+(`family_members.user_id`, `users.must_change_password`).
+
+- `POST /family/members` takes an optional `login: {email, password?}`. Without
+  a password a 12-character temporary one is generated. The response is the
+  usual family view plus `credentials: {member_id, email, temporary_password}`;
+  `temporary_password` is shown once, and is `null` when the head chose it.
+- `POST /family/members/{id}/login` (add one to an existing member),
+  `POST /family/members/{id}/login/reset-password`,
+  `PATCH /family/members/{id}/login` (`{is_active}`),
+  `DELETE /family/members/{id}/login` (switches the account off, detaches it).
+  Head only; anyone else gets 404. The head's own entry cannot have one (409).
+- Each member in the family view has `has_login` and
+  `login: {email, is_active, must_change_password} | null`.
+- The account is a company user (role `user`) in the head's company, created
+  through a platform session because tenant sessions may only read `users`.
+  Audit events: `family_member_login_created`, `_password_reset`, `_disabled`,
+  `_enabled`, `_removed` (never the password).
+- `POST /auth/login` and `GET /auth/me` return `must_change_password`; it is
+  cleared by `POST /auth/me/password`.
+- A member with a sign-in: `POST /cases` links the case to them automatically
+  (identity types) and refuses another member (422); cannot set up a family of
+  their own (409); sees no family.
+- Removing a member switches their account off. A removed login's email stays
+  used by the switched-off account.
+- Not yet: the head managing a member's cases and documents (Phase 9B), the
+  family comparison case (Phase 9C). A member who is also the submitter can
+  still settle conflicts on their own case until 9B restricts that.
+
+## Phase 9B: The head manages members' cases (done)
+
+- `app/api/case_access.py`: a `user` sees the cases they submitted, the cases of a
+  family they head (a member's bundle, a comparison), and the cases about
+  themselves when they are a member with a sign-in. `can_manage_case`: a
+  reviewer, the head of the case's family, or the submitter of a case outside any
+  family. A member signed in on their own can see their case but not manage it.
+- Head can: upload to a member's case (`POST /cases/{id}/documents`), settle
+  profile conflicts (`PUT /cases/{id}/profile/{field}`), accept or dismiss findings
+  (`PATCH /cases/{id}/findings/{finding_id}`). Others get 403 (unchanged contract).
+- `GET /cases` for a `user` includes the family's cases. `GET /cases/{id}` returns
+  `can_manage`.
+- `GET /family` lists each case's `documents` ({id, filename, document_type,
+  processing_status}). `GET /family/me`: a member's own cases and documents.
+
+## Phase 9C: Family comparison case (done)
+
+Migration `b9f3d5a7c1e2` (`case_type` value `family_comparison`, `cases.family_id`,
+`cases.comparison_member_ids`).
+
+- `POST /family/comparisons {member_ids}`: the head is always included; at least
+  one other member. Creates a case of type `family_comparison` (no documents) and
+  runs the family checks on the members' verified profiles.
+- Each conflict is stored as a `cross_document_findings` row (`finding_type`
+  `family_check`, `classification` `conflict`, `detail` {member_id, check}), so it
+  is accepted or dismissed with `PATCH /cases/{id}/findings/{finding_id}`.
+- `GET /family/comparisons` (list), `GET /family/comparisons/{id}?lang=`
+  (members, every check with `finding_id`, `review_status`, `resolution`; `is_head`,
+  `can_review`), `POST .../refresh` (re-run, keeps decisions on conflicts still
+  present, removes those gone), `DELETE` (closes it). Head writes; reviewers read.
+- `POST /cases` refuses `family_comparison`; uploading to one is 409.
+
+## Phase 9 frontend (done)
+
+- `pages/ChangePasswordPage.tsx` and a redirect in `ProtectedRoute` for
+  `must_change_password`.
+- Family page: sign-in controls per member (create, reset, switch off or on,
+  remove), one-time credentials dialog, login option in Add member, each case's
+  documents, "Add document" (joins the member's existing bundle: `NewCasePage`),
+  `FamilyComparePanel`, and `MemberHome` for a member with a sign-in.
+- `pages/FamilyComparisonPage.tsx` (`/family/compare/:caseId`); a comparison
+  opened as a case redirects there. `CaseDetailPage` follows `can_manage`.
+- Checked in a browser against the running stack (16 checks) and by API against
+  PostgreSQL (33 checks), and with the real pipeline on the synthetic family F01.

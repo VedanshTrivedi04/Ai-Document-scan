@@ -330,6 +330,11 @@ class CaseFamilyMember(BaseModel):
 
 
 class CaseDetail(CaseListItem):
+    can_manage: bool = Field(
+        default=False,
+        description="Whether the caller may settle this case's profile conflicts and accept or dismiss its "
+        "findings: a company reviewer, the head of the case's family, or the submitter of a case outside any family.",
+    )
     family_member: CaseFamilyMember | None = None
     documents: list[CaseDocumentSummary]
     cross_document_findings: list[CrossDocumentFindingSummary]

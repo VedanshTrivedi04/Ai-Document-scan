@@ -140,7 +140,7 @@ export function LoginPage() {
         return
       }
 
-      navigate("/", { replace: true })
+      navigate(resp.must_change_password ? "/change-password" : "/", { replace: true })
     } catch (err) {
       setFormError(
         err instanceof ApiError ? err.message : "Something went wrong. Please try again."
