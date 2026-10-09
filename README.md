@@ -35,7 +35,7 @@ companies share one deployment, each seeing only its own data.
 This repository also contains a contradiction detector for a person's document bundle (identity card,
 address proof, income certificate): harmless differences between the documents are ignored, real
 conflicts are flagged with a severity and their place on the page, and a reviewer accepts or dismisses
-each one. See [`docs/CONTRADICTION_DETECTOR_REPORT.md`](docs/CONTRADICTION_DETECTOR_REPORT.md) and
+each one. See [`docs/REAL_WORLD_PROBLEM_AND_SOLUTION.md`](docs/REAL_WORLD_PROBLEM_AND_SOLUTION.md) (comprehensive Indian public systems analysis), [`docs/CONTRADICTION_DETECTOR_REPORT.md`](docs/CONTRADICTION_DETECTOR_REPORT.md), and
 [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md). To see it without any setup beyond Python:
 
 ```bash
