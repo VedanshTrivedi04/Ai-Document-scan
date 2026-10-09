@@ -113,7 +113,7 @@ export function LoginPage() {
 
   // Already authenticated — don't show the login form again.
   if (token && !redirectPrompt) {
-    const from = (location.state as { from?: string } | null)?.from ?? "/cases"
+    const from = (location.state as { from?: string } | null)?.from ?? "/dashboard"
     return <Navigate to={from} replace />
   }
 
@@ -140,7 +140,7 @@ export function LoginPage() {
         return
       }
 
-      navigate(resp.must_change_password ? "/change-password" : "/", { replace: true })
+      navigate(resp.must_change_password ? "/change-password" : "/dashboard", { replace: true })
     } catch (err) {
       setFormError(
         err instanceof ApiError ? err.message : "Something went wrong. Please try again."

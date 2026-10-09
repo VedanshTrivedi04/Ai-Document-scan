@@ -39,7 +39,7 @@ export type NavItemId =
 // For normal citizen users (user role): their primary workspace is "My family" and "My cases".
 // The company review queue ("Cases") is for corporate reviewers and company portals.
 const NAV_VISIBLE: Record<NavItemId, (u: CurrentUser | undefined, isOrg: boolean) => boolean> = {
-  dashboard: (u) => !u?.is_platform_admin,
+  dashboard: () => true,
   review_queue: (u, isOrg) => Boolean(u?.is_platform_admin) || hasRank(u?.role, "reviewer_l1") || isOrg,
   cases: (u, isOrg) => Boolean(u?.is_platform_admin) || hasRank(u?.role, "reviewer_l1") || isOrg,
   my_cases: (u) => !u?.is_platform_admin,
@@ -51,7 +51,7 @@ const NAV_VISIBLE: Record<NavItemId, (u: CurrentUser | undefined, isOrg: boolean
 
 const NAV_ITEMS: { id: NavItemId; label: string; icon: any; href: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutGridIcon, href: "/dashboard" },
-  { id: "cases", label: "Cases", icon: ShieldCheckIcon, href: "/" },
+  { id: "cases", label: "Cases", icon: ShieldCheckIcon, href: "/cases" },
   { id: "my_cases", label: "My cases", icon: FileTextIcon, href: "/my-cases" },
   { id: "family", label: "My family", icon: UsersIcon, href: "/family" },
   { id: "audit_history", label: "Audit history", icon: ClockIcon, href: "/audit-history" },

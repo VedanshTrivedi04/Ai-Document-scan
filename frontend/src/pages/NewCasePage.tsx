@@ -792,7 +792,9 @@ export function NewCasePage() {
               <div className="mb-1 text-[11px] font-bold uppercase tracking-widest text-accent">Evidence Integrity</div>
               <h3 className="text-base font-bold text-foreground">Originals remain unchanged</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Every uploaded file is preserved with a verifiable integrity hash and complete audit history.
+                {retentionDays > 0
+                  ? `Each file is stored unaltered, with a verifiable integrity hash, for ${retentionDays} days and then removed. The details read from it and the complete audit history are kept.`
+                  : "Every uploaded file is preserved with a verifiable integrity hash and complete audit history."}
               </p>
             </div>
           </div>

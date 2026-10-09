@@ -1258,3 +1258,28 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Fake accounts from those checks remain in the database (emails starting `e2e.`, `ui.`, `real.`, `dbg.` at example.com).
 - Pre-existing, not fixed: `react-hooks/rules-of-hooks` lint error in `CaseDetailPage.tsx` (useMemo after an early return); stale test `test_audit_log_is_not_available_to_submitters`; `npm install` is needed for `gsap` and `lenis` (declared, missing from the lockfile).
 - Not built: changing the head, a member leaving the family, reusing the email of a removed sign-in, notifications.
+
+
+---
+
+### 2026-10-10 (document retention and private uploads)
+
+**User Request**
+> Files delete themselves 24 days after upload, only the data stays; plus a toggle at upload to remove a case entirely at logout; show warnings; do not disturb what works.
+
+**Decisions the owner confirmed**
+- OCR text is removed with the file. The rule applies to cases still in review. Files already older than 24 days go on the first run. Bulk-upload zips are removed; generated report PDFs are kept.
+- Private upload: emptied at sign-out and when the session runs out; an emptied case stays as a closed record; offered to citizens on the public site only; always its own bundle.
+
+**Work Done**
+- `app/services/retention_service.py`, `app/tasks/retention_task.py`, `scripts/purge_expired_files.py` (dry run by default), migration `c1a3e5b7d9f2`, `StorageService.delete`. Contract in `docs/DEVELOPMENT_PHASES.md` Phase 10.
+- `POST /auth/logout`, `GET /auth/private-cases`, `GET /auth/me/retention`. The upload-limits response was left unchanged on purpose (a test compares it exactly).
+- Frontend: `components/case/RetentionNotice.tsx`, warning and toggle in `NewCasePage`, sign-out confirm in `Nav`.
+- Tests: `backend/tests/test_retention.py`. Live checks against PostgreSQL, local storage and the real pipeline: 29 API checks and 15 browser checks pass.
+
+**Things to know**
+- Wiping must write SQL NULL (`sqlalchemy.null()`) to JSON columns; plain None stores the JSON value null and the cleanup job then thinks data is left.
+- The app role cannot DELETE documents or checks and cannot touch audit_log, case_actions, case_risk_assessments or case_reports. So an emptied private case keeps its rows blanked, and its audit rows (with the original file name) remain.
+- Signature references are not removed (they are a reviewer reference library). Face descriptions inside `extracted_fields` stay with the 24-day rule and go with a private wipe.
+- `scripts/` is not in the Docker image: run the dry run from `backend/` on the host, or call `retention_service.purge_expired_files(dry_run=True)` inside the container.
+- Another session was working in this repository at the same time (token revocation at sign-out, security headers, a citizen dashboard) and committed the tree, including this work, at 04:03. Its `CitizenDashboard.tsx` had unused-import type errors while this was written.

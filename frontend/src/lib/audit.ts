@@ -21,6 +21,9 @@ export const AUDIT_EVENT_LABELS: Record<string, string> = {
 
   // Documents
   document_uploaded: "Document uploaded",
+  document_file_deleted: "File removed after the retention period",
+  bulk_upload_file_deleted: "Bulk upload zip removed after the retention period",
+  case_data_removed: "Private case emptied",
   document_deleted: "Document deleted",
   document_reprocessed: "Document reprocessed",
 

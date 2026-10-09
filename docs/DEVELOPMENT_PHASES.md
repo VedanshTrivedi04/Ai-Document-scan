@@ -445,3 +445,50 @@ Migration `b9f3d5a7c1e2` (`case_type` value `family_comparison`, `cases.family_i
   opened as a case redirects there. `CaseDetailPage` follows `can_manage`.
 - Checked in a browser against the running stack (16 checks) and by API against
   PostgreSQL (33 checks), and with the real pipeline on the synthetic family F01.
+
+## Phase 10: Document retention and private uploads (done)
+
+Migration `c1a3e5b7d9f2` (`documents.file_deleted_at`, `bulk_uploads.file_deleted_at`,
+`cases.delete_on_logout`, `cases.data_removed_at`). Rules and reasons are in
+`app/services/retention_service.py`.
+
+**Files expire.** `DOCUMENT_RETENTION_DAYS` (default 24, 0 = off) after upload, a
+document's stored file and its OCR text are removed. The extracted details, the
+findings, the verified profile and the audit trail stay. The zip of a bulk upload
+expires the same way; generated report PDFs do not.
+
+- `StorageService.delete()` (local and Azure; a file already gone is not an error).
+- Celery beat: `purge_expired_files` daily at `DOCUMENT_RETENTION_HOUR_UTC`:30,
+  `purge_private_cases` every ten minutes, both on `housekeeping_queue`.
+- By hand from `backend/`: `python -m scripts.purge_expired_files` counts only;
+  `--apply` removes. Removal cannot be undone.
+- A document still unread when its file expires is marked `failed`. The stuck-document
+  job skips documents without a file.
+- API: each document in `GET /cases/{id}` has `file_url` (null once removed),
+  `file_deleted_at`, `file_expires_at`. `GET /cases/{id}/documents/{doc}/file-url`
+  answers 410 once removed. Family document lists carry `file_deleted`.
+  `GET /auth/me/retention` returns `{document_retention_days, private_upload_available}`.
+- Audit: `document_file_deleted`, `bulk_upload_file_deleted`.
+
+**Private uploads.** `POST /cases` takes `delete_on_logout: true`, only for a `user` of
+the public company on an identity or hiring case (422 otherwise).
+
+- `POST /auth/logout` empties the caller's private cases: files, OCR text, extracted
+  details, check results, findings and profile choices; file names become
+  "removed document". The emptied case stays, `closed`, with `data_removed_at`.
+  Returns `{removed_cases: [case numbers]}`. `GET /auth/private-cases` lists what
+  signing out will empty.
+- Never signed out: emptied once `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` have passed since
+  the case was created. The same job re-empties a case if a document finished
+  reading after the wipe.
+- An emptied case takes no more uploads (409) and no longer counts as a family
+  member's bundle.
+- Not removed, because those tables are append-only in the database: audit log
+  rows (which include the original file name in `document_uploaded`), case
+  actions, risk assessments, generated reports. Signature references are kept.
+- Audit: `case_data_removed` (counts and reason only).
+
+**Frontend.** Upload page: a warning that files are removed after N days, and a
+"Private upload" toggle (always its own bundle). Case page: "File removed in N days"
+beside a stored file, a notice in place of the viewer once it is removed, a banner on
+a private case. Sign out asks first when private uploads would be removed.
