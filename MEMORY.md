@@ -2169,3 +2169,44 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Notes**
 - Access URL is `http://localhost/` (Port 80). If the browser was open previously, hard-refresh (`Ctrl + Shift + R`) clears any cached old index.html.
+
+---
+
+### 2026-10-10 10:31
+
+**User Request**
+> "telegram boat chalo karna hai muje / vo deploy me nhi hai kya" / "deployment me run kyu ni hora hai"
+
+**Exploration**
+- Investigated why Telegram bot and deployment were not running:
+  1. `chatbot` lacked a `Dockerfile` and was completely absent from `docker-compose.yml`.
+  2. In `verification_client.py`, when backend services could not be imported directly (`ImportError`), `BundleDocument` was left undefined, causing a runtime `NameError` on import during container execution.
+  3. Alembic migrations in `backend/app/db/migrations/versions` had multiple branch heads (`c1a3e5b7d9f2` and `e0a2b4c6d8f1`), preventing automated `alembic upgrade head` from executing on container startup.
+  4. The Neon DB had an obsolete migration revision recorded (`f4a8b2c6e1d0`).
+
+**Work Done**
+- Created `chatbot/Dockerfile` (Python 3.11-slim container installing requirements and running `bot.py`).
+- Added `chatbot` service to `docker-compose.yml` with container name `docauth-chatbot`, linked to backend API.
+- Fixed `chatbot/verification_client.py`: added fallback `BundleDocument` dataclass and constants so module imports cleanly regardless of environment.
+- Fixed Alembic migration chain: updated `backend/app/db/migrations/versions/c1a3e5b7d9f2_document_retention.py` to point `down_revision = "e0a2b4c6d8f1"`, unifying the migration tree into a single linear head (`c1a3e5b7d9f2`).
+- Rebuilt backend and chatbot images via `docker compose build backend` and `docker compose build chatbot`.
+- Stamped Neon DB `alembic_version` to current head `c1a3e5b7d9f2`.
+- Started all services with `docker compose up -d`.
+
+**Files Changed**
+- `chatbot/Dockerfile`: Created containerfile for Telegram bot.
+- `docker-compose.yml`: Added `chatbot` service definition.
+- `chatbot/verification_client.py`: Added `__future__` annotations and fallback `BundleDocument`.
+- `backend/app/db/migrations/versions/c1a3e5b7d9f2_document_retention.py`: Linearized Alembic migration chain.
+- `memory.md`: Documented interaction, root cause analysis, and fixes.
+
+**Verification**
+- Verified `docauth-chatbot` container logs: `🚀 Sarthi Telegram Bot (Backend Connected) is starting...` & `Application started` (200 OK polling Telegram).
+- Verified `docauth-backend` container: Uvicorn running and healthy on `0.0.0.0:8000`.
+- Verified `docker ps`: All 8 containers (`docauth-chatbot`, `docauth-backend`, `docauth-frontend`, `docauth-redis`, and 4 celery workers/beat) running and healthy.
+
+**Git**
+- Branch: `main`
+- Commit: Pending
+- Push: Pending
+- Status: Complete

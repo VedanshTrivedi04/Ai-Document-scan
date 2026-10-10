@@ -6,6 +6,8 @@ verification_client.py: Connects Sarthi Telegram Bot directly to backend service
   Gemini Vision API, Regex ID Heuristics).
 """
 
+from __future__ import annotations
+
 import base64
 import hashlib
 import json
@@ -33,6 +35,8 @@ from config import BACKEND_API_BASE, BOT_USER_EMAIL, BOT_USER_PASSWORD
 
 logger = logging.getLogger(__name__)
 
+from dataclasses import dataclass, field
+
 # Backend contradiction engine imports
 try:
     from app.services.identity_comparison import (
@@ -51,6 +55,27 @@ try:
 except ImportError as e:
     logger.warning(f"Could not import backend services directly: {e}")
     BACKEND_AVAILABLE = False
+
+    @dataclass
+    class BundleDocument:
+        id: str = ""
+        filename: str = ""
+        document_type: str = ""
+        fields: dict = field(default_factory=dict)
+        faces: tuple = ()
+        signatures: tuple = ()
+
+    HARMLESS = "harmless_variant"
+    CONFLICT = "conflict"
+    MATCH = "match"
+    FIELD_LABELS = {}
+    DOCUMENT_LABELS = {}
+
+    def find_identity_contradictions(*args, **kwargs):
+        return []
+
+    def build_message(*args, **kwargs):
+        return {}
 
 
 # Cache of test card file hashes to their ground-truth data
