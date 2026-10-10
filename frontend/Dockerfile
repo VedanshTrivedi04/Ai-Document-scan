@@ -13,4 +13,4 @@ FROM nginx:1.27-alpine
 ENV UPLOAD_BODY_LIMIT=11m     BULK_UPLOAD_BODY_LIMIT=301m
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 80 10000
