@@ -2134,12 +2134,38 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Push: Successful (`origin/feat/telegram-chatbot`)
 - Status: Complete
 
+---
 
+### 2026-10-10 06:55
 
+**User Request**
+> "run project locally" / "landing page kyu ni ara"
 
+**Exploration**
+- Inspected active local Docker compose stack:
+  - All backend, Celery workers, beat, redis, and frontend containers were running.
+  - The `docauth-frontend` container had been created 14 hours prior, before the latest commits introducing `LandingPage.tsx` and DocSure branding were pulled.
+  - Inspected `/usr/share/nginx/html/assets` inside `docauth-frontend` and discovered `LandingPage-*.js` was completely absent in the container image.
+  - Docker Compose `up -d` starts existing container images and does not rebuild from source without `--build`.
 
+**Work Done**
+- Executed `docker compose build frontend` to compile the latest frontend source (including `LandingPage.tsx`, Lucide icons, Lenis, and GSAP).
+- Recreated and restarted the frontend container: `docker compose up -d frontend`.
+- Verified that `LandingPage-D3EsEd6H.js` is now compiled, bundled, and served on `http://localhost/` (Port 80) returning HTTP 200.
 
+**Files Changed**
+- `memory.md`: Documented interaction, diagnosis, and rebuild fix.
 
+**Verification**
+- Queried `http://localhost/`: returned HTTP 200 with new script `/assets/index-BykQmKgj.js`.
+- Queried `http://localhost/assets/LandingPage-D3EsEd6H.js`: returned HTTP 200.
+- Queried `http://localhost/api/health`: returned `{"status":"ok","environment":"local"}`.
 
+**Git**
+- Branch: `main`
+- Commit: Pending
+- Push: Pending
+- Status: Complete
 
-
+**Notes**
+- Access URL is `http://localhost/` (Port 80). If the browser was open previously, hard-refresh (`Ctrl + Shift + R`) clears any cached old index.html.
