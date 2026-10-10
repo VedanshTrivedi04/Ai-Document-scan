@@ -25,6 +25,6 @@ COPY app ./app
 # check reports "unavailable" (see app/services/face_service.py).
 RUN python -m app.services.face_models || echo "WARNING: face models not downloaded"
 
-EXPOSE 8000
-# The same image runs the API and the Celery worker; the command is set per service.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8000 10000
+CMD ["sh", "start-api.sh"]
+

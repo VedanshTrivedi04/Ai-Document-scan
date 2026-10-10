@@ -63,6 +63,16 @@ app.include_router(platform_router)
 
 
 @app.get(
+    "/",
+    tags=["health"],
+    summary="Root health check",
+    description="Returns {status: ok} so load balancers and platform health checks succeed.",
+)
+def root_check() -> dict[str, str]:
+    return {"status": "ok", "app": APP_NAME}
+
+
+@app.get(
     "/health",
     tags=["health"],
     summary="Liveness check",
@@ -75,3 +85,4 @@ def health_check() -> dict[str, str]:
     if not settings.is_local_environment:
         return {"status": "ok"}
     return {"status": "ok", "environment": settings.environment}
+
