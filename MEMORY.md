@@ -2210,3 +2210,37 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 - Commit: `4b43b38` (`feat: add telegram chatbot to docker-compose and linearize alembic migrations`)
 - Push: Successful (`origin/main`)
 - Status: Complete
+
+---
+
+### 2026-10-10 10:46
+
+**User Request**
+> "render par karna chata hu me to" / "deploy vali branch se deployment kya tha mene"
+
+**Exploration**
+- Inspected `render.yaml` on `deploy` branch:
+  - Only `fddt-backend` and `fddt-frontend` were configured.
+  - Sarthi Telegram Bot had no service definition, no port binding, and no cloud health endpoint.
+- Explored Render free tier constraints:
+  - Free web services require binding to `$PORT` (default 10000) and responding HTTP 200 on healthcheck.
+  - Merged `main` fixes (including `chatbot/Dockerfile`, `BundleDocument` fallback, linear migration chain, and daemon HTTP health server in `bot.py`) into `deploy`.
+
+**Work Done**
+- Merged branch `main` into `deploy`.
+- Added `fddt-chatbot` web service to `render.yaml` on branch `deploy` with `healthCheckPath: /health` and port `10000`.
+- Committed and pushed changes to `origin/deploy`.
+
+**Files Changed**
+- `render.yaml`: Added `fddt-chatbot` cloud service specification.
+- `memory.md`: Documented deploy branch synchronization and Render configuration.
+
+**Verification**
+- Validated YAML syntax of `render.yaml`.
+- Verified python syntax of `bot.py` with daemon health server.
+
+**Git**
+- Branch: `deploy`
+- Commit: Pending
+- Push: Pending
+- Status: In progress

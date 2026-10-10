@@ -183,3 +183,24 @@ services:
         value: 11m
       - key: BULK_UPLOAD_BODY_LIMIT
         value: 51m
+
+  # ─────────────────────────────────────────────────────────────
+  # 3. Sarthi Telegram Chatbot  (Python + Polling)
+  # ─────────────────────────────────────────────────────────────
+  - type: web
+    name: fddt-chatbot
+    runtime: docker
+    dockerfilePath: ./chatbot/Dockerfile
+    dockerContext: ./chatbot
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false          # Set your Bot Token in the Render dashboard
+      - key: VERIFICATION_API_URL
+        value: https://fddt-backend.onrender.com/api/verify
+      - key: MOCK_MODE
+        value: "false"
+      - key: PORT
+        value: "10000"
+
