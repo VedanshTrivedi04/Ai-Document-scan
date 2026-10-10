@@ -39,7 +39,7 @@ export type NavItemId =
 // For normal citizen users (user role): their primary workspace is "My family" and "My cases".
 // The company review queue ("Cases") is for corporate reviewers and company portals.
 const NAV_VISIBLE: Record<NavItemId, (u: CurrentUser | undefined, isOrg: boolean) => boolean> = {
-  dashboard: () => true,
+  dashboard: (u) => !u?.is_platform_admin,
   review_queue: (u, isOrg) => Boolean(u?.is_platform_admin) || hasRank(u?.role, "reviewer_l1") || isOrg,
   cases: (u, isOrg) => Boolean(u?.is_platform_admin) || hasRank(u?.role, "reviewer_l1") || isOrg,
   my_cases: (u) => !u?.is_platform_admin,
@@ -51,7 +51,7 @@ const NAV_VISIBLE: Record<NavItemId, (u: CurrentUser | undefined, isOrg: boolean
 
 const NAV_ITEMS: { id: NavItemId; label: string; icon: any; href: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutGridIcon, href: "/dashboard" },
-  { id: "cases", label: "Cases", icon: ShieldCheckIcon, href: "/cases" },
+  { id: "cases", label: "Cases", icon: ShieldCheckIcon, href: "/" },
   { id: "my_cases", label: "My cases", icon: FileTextIcon, href: "/my-cases" },
   { id: "family", label: "My family", icon: UsersIcon, href: "/family" },
   { id: "audit_history", label: "Audit history", icon: ClockIcon, href: "/audit-history" },
@@ -129,7 +129,7 @@ export function Nav({ active, onNewUploadClick }: NavProps) {
         <div className="flex items-center gap-3 sm:gap-6 min-w-0">
           {/* Logo mark + wordmark */}
           <Link to="/" className="group flex items-center gap-2 sm:gap-2.5 shrink-0">
-            <img src="/logo.png" alt={APP_NAME} className="size-8 sm:size-9 shrink-0 rounded-xl object-contain shadow-sm shadow-blue-500/30" />
+            <img src="/logo.png" alt="" className="size-8 sm:size-9 shrink-0 rounded-xl shadow-sm shadow-blue-500/30" />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="text-sm sm:text-[15px] font-bold leading-tight tracking-tight text-slate-900 shrink-0">

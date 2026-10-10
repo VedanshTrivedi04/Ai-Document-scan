@@ -113,7 +113,7 @@ export function LoginPage() {
 
   // Already authenticated — don't show the login form again.
   if (token && !redirectPrompt) {
-    const from = (location.state as { from?: string } | null)?.from ?? "/dashboard"
+    const from = (location.state as { from?: string } | null)?.from ?? "/cases"
     return <Navigate to={from} replace />
   }
 
@@ -140,7 +140,7 @@ export function LoginPage() {
         return
       }
 
-      navigate(resp.must_change_password ? "/change-password" : "/dashboard", { replace: true })
+      navigate(resp.must_change_password ? "/change-password" : "/", { replace: true })
     } catch (err) {
       setFormError(
         err instanceof ApiError ? err.message : "Something went wrong. Please try again."
@@ -183,7 +183,7 @@ export function LoginPage() {
         <div className="rounded-3xl border border-accent/15 bg-card p-5 sm:p-8 md:p-10 shadow-card">
           <header className="mb-6 sm:mb-8 text-center">
             <div className="mb-4 sm:mb-5 flex items-center justify-center gap-3">
-              <img src="/logo.png" alt={APP_NAME} className="size-9 sm:size-10 rounded-xl object-contain shadow-sm shadow-accent/20" />
+              <img src="/logo.png" alt="" className="size-9 sm:size-10 rounded-xl shadow-sm shadow-accent/20" />
               <div className="text-left">
                 <span className="block text-lg sm:text-xl font-bold leading-tight tracking-tight text-foreground">
                   {APP_NAME}
