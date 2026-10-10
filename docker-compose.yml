@@ -95,6 +95,23 @@ services:
       retries: 10
 
   # ---------------------------------------------------------------------------
+  # Sarthi Telegram Chatbot
+  # ---------------------------------------------------------------------------
+  chatbot:
+    build:
+      context: ./chatbot
+      dockerfile: Dockerfile
+    image: fddt-chatbot:local
+    container_name: docauth-chatbot
+    restart: unless-stopped
+    env_file: ./chatbot/.env
+    environment:
+      VERIFICATION_API_URL: http://backend:8000/api/verify
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
   # Processing workers (optional, local) — run with `--profile workers`
   # e.g.: docker compose --profile workers up --watch
   # ---------------------------------------------------------------------------
