@@ -2241,6 +2241,41 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `deploy`
-- Commit: `cb6c3ec` (`feat(deploy): add fddt-chatbot service to render.yaml`)
+- Commit: `db17a74`
 - Push: Successful (`origin/deploy`)
 - Status: Complete
+
+---
+
+### 2026-10-10 11:00
+
+**User Request**
+> "fqail ho gayay ... COPY requirements.txt ./: not found"
+
+**Exploration**
+- Root-cause analysis of Render build error:
+  - Render builds Docker containers from the repository root (`.`) by default, rather than subfolder `./chatbot`.
+  - In `chatbot/Dockerfile`, `COPY requirements.txt ./` looked for `requirements.txt` at the root of the workspace, where it did not exist.
+  - Replicated locally with `docker build -f chatbot/Dockerfile .` and reproduced the exact same failure (`requirements.txt: not found`).
+
+**Work Done**
+- Updated `chatbot/Dockerfile` to reference `chatbot/requirements.txt` and `chatbot/` files directly.
+- Updated `docker-compose.yml` and `render.yaml` to specify `dockerContext: .` with `dockerfilePath: ./chatbot/Dockerfile`.
+- Configured real live Render backend URL (`https://ai-document-scan.onrender.com`) in `render.yaml`.
+- Verified local build `docker build -f chatbot/Dockerfile -t test-chatbot .` passed with exit code 0.
+- Pushed updates to both `deploy` and `main` branches.
+
+**Files Changed**
+- `chatbot/Dockerfile`: Updated paths to `chatbot/requirements.txt` for root-context builds.
+- `docker-compose.yml`: Updated `chatbot` build context to `.`.
+- `render.yaml`: Updated `fddt-chatbot` `dockerContext` to `.` and attached live Render backend URL.
+- `memory.md`: Documented diagnosis, fix, and verification.
+
+**Verification**
+- Executed `docker build -f chatbot/Dockerfile -t test-chatbot .`: built successfully with 0 errors.
+
+**Git**
+- Branch: `deploy` and `main`
+- Commit: Pending
+- Push: Pending
+- Status: In progress

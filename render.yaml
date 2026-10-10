@@ -191,16 +191,19 @@ services:
     name: fddt-chatbot
     runtime: docker
     dockerfilePath: ./chatbot/Dockerfile
-    dockerContext: ./chatbot
+    dockerContext: .
     plan: free
     healthCheckPath: /health
     envVars:
       - key: TELEGRAM_BOT_TOKEN
         sync: false          # Set your Bot Token in the Render dashboard
+      - key: BACKEND_API_BASE
+        value: https://ai-document-scan.onrender.com
       - key: VERIFICATION_API_URL
-        value: https://fddt-backend.onrender.com/api/verify
+        value: https://ai-document-scan.onrender.com/cases
       - key: MOCK_MODE
         value: "false"
       - key: PORT
         value: "10000"
+
 

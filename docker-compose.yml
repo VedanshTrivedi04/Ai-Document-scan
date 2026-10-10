@@ -99,8 +99,8 @@ services:
   # ---------------------------------------------------------------------------
   chatbot:
     build:
-      context: ./chatbot
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./chatbot/Dockerfile
     image: fddt-chatbot:local
     container_name: docauth-chatbot
     restart: unless-stopped
