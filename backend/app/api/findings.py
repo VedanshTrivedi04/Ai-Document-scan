@@ -18,7 +18,9 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_tenant_db, require_company_role
 from app.api.case_access import ensure_can_act, ensure_can_manage_case, scoped_company_id
 from app.models.base import utcnow
-from app.models.case import Case, CaseStatus
+from app.models.case import Case, CaseStatus, is_identity_case_type
+from app.models.document import Document
+from pydantic import BaseModel
 from app.models.cross_document_finding import REVIEW_PENDING, CrossDocumentFinding
 from app.models.user import User, UserRole, has_rank, role_label
 from app.schemas.case import (
@@ -31,6 +33,7 @@ from app.services.audit_service import record_event
 from app.services.identity_messages import warm_up as warm_up_messages
 from app.services.risk_scoring_service import request_case_scoring
 from app.services.translation_service import normalize_language
+from app.tasks.document_checks import run_cross_document_checks
 
 router = APIRouter(prefix="/cases", tags=["findings"])
 
@@ -123,3 +126,89 @@ def review_finding(
         finding=next(s for s in summaries if s.id == finding_id),
         finding_counts=FindingCounts.from_findings(summaries),
     )
+
+
+# ---------------------------------------------------------------------------
+# The reference signature (app/services/signature_local.py)
+# ---------------------------------------------------------------------------
+
+class SignatureReferenceRequest(BaseModel):
+    document_id: uuid.UUID
+
+
+class SignatureReferenceResponse(BaseModel):
+    signature_reference_document_id: uuid.UUID | None
+
+
+def _identity_case_for_signature(db: Session, case_id: uuid.UUID, actor: User) -> Case:
+    company_id = scoped_company_id(db)
+    case = db.execute(select(Case).where(Case.id == case_id, Case.company_id == company_id)).scalar_one_or_none()
+    if case is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
+    ensure_can_act(actor, case)
+    if not is_identity_case_type(case.case_type):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Signatures are compared in identity cases only.")
+    if case.status in _DECIDED_CASE:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"This case is already {case.status.value}.")
+    return case
+
+
+@router.put(
+    "/{case_id}/signature-reference",
+    response_model=SignatureReferenceResponse,
+    summary="Choose the document whose signature the others are compared with",
+    description=(
+        "Company reviewers only, identity cases only. The chosen document must carry a signature the "
+        "pipeline found (409 otherwise). Every other document's signature is compared with it and a "
+        "`signature` finding is written per document; a document with no signature is reported as "
+        "not compared, not as a mismatch. Runs in the background; reload the case to see the findings."
+    ),
+)
+def set_signature_reference(
+    case_id: uuid.UUID,
+    payload: SignatureReferenceRequest,
+    actor: User = Depends(_reviewer),
+    db: Session = Depends(get_tenant_db),
+) -> SignatureReferenceResponse:
+    case = _identity_case_for_signature(db, case_id, actor)
+    document = db.execute(
+        select(Document).where(
+            Document.id == payload.document_id, Document.case_id == case.id, Document.company_id == case.company_id
+        )
+    ).scalar_one_or_none()
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Document not found in this case")
+    found = ((document.extracted_fields or {}).get("signatures") or {}).get("items") or []
+    if not found:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "No signature was found on that document, so it cannot be the reference."
+        )
+    case.signature_reference_document_id = document.id
+    record_event(
+        db, "signature_reference_set", case_id=case.id, document_id=document.id, actor_user_id=actor.id,
+        event_data={"document": document.original_filename, "actor_role": role_label(actor.role)},
+    )
+    db.commit()
+    run_cross_document_checks.delay(str(case.id), str(case.company_id))
+    return SignatureReferenceResponse(signature_reference_document_id=document.id)
+
+
+@router.delete(
+    "/{case_id}/signature-reference",
+    response_model=SignatureReferenceResponse,
+    summary="Stop comparing signatures",
+)
+def clear_signature_reference(
+    case_id: uuid.UUID,
+    actor: User = Depends(_reviewer),
+    db: Session = Depends(get_tenant_db),
+) -> SignatureReferenceResponse:
+    case = _identity_case_for_signature(db, case_id, actor)
+    case.signature_reference_document_id = None
+    record_event(
+        db, "signature_reference_cleared", case_id=case.id, actor_user_id=actor.id,
+        event_data={"actor_role": role_label(actor.role)},
+    )
+    db.commit()
+    run_cross_document_checks.delay(str(case.id), str(case.company_id))
+    return SignatureReferenceResponse(signature_reference_document_id=None)

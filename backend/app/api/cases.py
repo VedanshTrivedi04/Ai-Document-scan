@@ -399,6 +399,7 @@ def get_case_detail(
         can_manage=can_manage_case(db, current_user, case),
         delete_on_logout=case.delete_on_logout,
         data_removed_at=case.data_removed_at,
+        signature_reference_document_id=case.signature_reference_document_id,
         family_member=(
             CaseFamilyMember(
                 id=case.family_member.id,

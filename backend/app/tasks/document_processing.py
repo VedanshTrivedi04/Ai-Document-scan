@@ -28,7 +28,7 @@ from app.models.document import Document, DocumentProcessingStatus
 from app.models.document_check import DocumentCheck, DocumentCheckStatus, DocumentCheckType
 from app.services.audit_service import record_event
 from app.services.check_store import sanitize_null_bytes, save_check
-from app.services import face_service
+from app.services import face_service, signature_local
 from app.services.extraction_service import classify_and_extract
 from app.services.identity_documents import extract_identity, identity_extracted_fields
 from app.services.multi_invoice import extract_invoices
@@ -121,12 +121,28 @@ def _complete_identity_document(db, document: Document, ocr_result: OCRResult) -
     analysis = extract_identity(get_llm_service(), ocr_result.text)
     # The photographs on the document, compared across the bundle later
     # (app/services/face_service.py). Best effort: never fails the extraction.
+    content = b""
     try:
         content = get_storage_service_for_task().download_bytes(document.blob_storage_path)
         faces = face_service.analyse_document(content)
     except Exception as exc:  # noqa: BLE001
         faces = {"status": face_service.STATUS_FAILED, "items": [], "error": str(exc)[:300]}
-    extracted_fields = identity_extracted_fields(analysis, faces)
+    # Handwritten signatures, compared with the reviewer's chosen reference later
+    # (app/services/signature_local.py). Best effort, like the faces.
+    try:
+        pages = face_service._page_images(content)
+        words = [
+            [{"text": w.text, "x": w.x, "y": w.y, "width": w.width, "height": w.height} for w in page.words]
+            for page in ocr_result.pages
+        ]
+        exclude = {i + 1: [f["bounding_box"] for f in faces.get("items", []) if f["bounding_box"]["page"] == i + 1]
+                   for i in range(len(pages))}
+        signatures = signature_local.analyse_document(
+            [(img, words[i] if i < len(words) else []) for i, img in enumerate(pages)], exclude
+        )
+    except Exception as exc:  # noqa: BLE001
+        signatures = {"status": signature_local.STATUS_FAILED, "items": [], "error": str(exc)[:300]}
+    extracted_fields = identity_extracted_fields(analysis, faces, signatures)
     try:
         fields_located = attach_field_locations(ocr_result.pages, extracted_fields)
     except Exception:  # noqa: BLE001 - a missing highlight never fails the extraction
@@ -148,6 +164,7 @@ def _complete_identity_document(db, document: Document, ocr_result: OCRResult) -
             "fields_located": fields_located,
             "faces_found": len(faces.get("items") or []),
             "faces_status": faces.get("status"),
+            "signatures_found": len(signatures.get("items") or []),
             "schema": "identity",
         },
     )
@@ -189,7 +206,7 @@ def process_document(document_id: str, company_id: str | None = None) -> None:
             )
 
             ocr_service = get_ocr_service()
-            if hasattr(ocr_service, "analyze_bytes") and (isinstance(ocr_service, LocalOCRService) or getattr(storage, "is_local", False) or not document_url.startswith("http")):
+            if callable(getattr(type(ocr_service), "analyze_bytes", None)) and (isinstance(ocr_service, LocalOCRService) or getattr(storage, "is_local", False) is True or not document_url.startswith("http")):
                 # When using local storage or local OCR, Azure cannot reach localhost URLs. Pass file bytes directly.
                 ocr_result = ocr_service.analyze_bytes(storage.download_bytes(document.blob_storage_path))
             elif isinstance(ocr_service, LocalOCRService):
@@ -199,7 +216,7 @@ def process_document(document_id: str, company_id: str | None = None) -> None:
                     ocr_result = ocr_service.analyze_url(document_url)
                 except Exception:
                     # Fallback to direct bytes if URL fetch failed (e.g. non-public URL or SAS issue)
-                    if hasattr(ocr_service, "analyze_bytes"):
+                    if callable(getattr(type(ocr_service), "analyze_bytes", None)):
                         ocr_result = ocr_service.analyze_bytes(storage.download_bytes(document.blob_storage_path))
                     else:
                         raise

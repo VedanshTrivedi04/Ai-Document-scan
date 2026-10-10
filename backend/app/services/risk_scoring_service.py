@@ -498,6 +498,12 @@ def evaluate_rules(
 # Scoring
 # ---------------------------------------------------------------------------
 
+def _fingerprint_variants(base: str, count: int) -> list[str]:
+    """The base fingerprint of a state of the evidence, then one further variant per
+    time the case returns to it."""
+    return [base] + [hashlib.sha256(f"{base}#{n}".encode()).hexdigest() for n in range(1, count)]
+
+
 def _fingerprint(ev: _Evidence, fired: list[FiredRule]) -> str:
     payload = {
         "documents": sorted(str(d.id) for d in ev.documents),
@@ -532,11 +538,24 @@ def score_case(db: Session, company_id: uuid.UUID, case_id: uuid.UUID) -> CaseRi
 
     ev = _gather_evidence(db, company_id, case_id)
     fired, _warnings = evaluate_rules(load_current_rules(db, company_id, include_inactive=True), ev)
-    fingerprint = _fingerprint(ev, fired)
+    base_fingerprint = _fingerprint(ev, fired)
 
     latest = latest_assessment(db, company_id, case_id)
-    if latest is not None and latest.evidence_fingerprint == fingerprint:
+    stored = set(
+        db.execute(
+            select(CaseRiskAssessment.evidence_fingerprint).where(
+                CaseRiskAssessment.case_id == case_id, CaseRiskAssessment.company_id == company_id
+            )
+        ).scalars()
+    )
+    variants = _fingerprint_variants(base_fingerprint, len(stored) + 1)
+    if latest is not None and latest.evidence_fingerprint in variants:
         return latest
+    # Assessments are never changed. When the evidence returns to a state scored before (a
+    # conflict dismissed, a reference signature removed, a decision undone) the new
+    # assessment gets the next unused variant of the fingerprint, so it is stored as a new
+    # row and becomes the latest: the case shows the score of the state it is in now.
+    fingerprint = next(v for v in variants if v not in stored)
 
     settings = get_risk_settings(db, company_id)
     fired.sort(key=lambda f: (-f.rule.weight, f.rule.rule_id))

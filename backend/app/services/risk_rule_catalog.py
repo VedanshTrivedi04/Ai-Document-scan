@@ -73,7 +73,7 @@ SUB_CHECKS = [
 CROSS_FIELDS = [
     "amount", "date", "issuer",
     # one person's documents (app/services/identity_comparison.py)
-    "full_name", "parent_or_spouse_name", "date_of_birth", "gender", "address", "annual_income", "id_number", "photo",
+    "full_name", "parent_or_spouse_name", "date_of_birth", "gender", "address", "annual_income", "id_number", "photo", "signature",
 ]
 # "consistent" is the good outcome; a rule that fires on it would be a mistake.
 SIGNATURE_RESULTS = [

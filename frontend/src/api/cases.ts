@@ -235,3 +235,24 @@ export function generateCaseReport(caseId: string, token: string): Promise<CaseR
 export function listCaseReports(caseId: string, token: string): Promise<CaseReport[]> {
   return apiFetch<CaseReport[]>(`/cases/${caseId}/reports`, { token })
 }
+
+// ---- Signature comparison: the reference document (reviewers, identity cases) ----
+
+export function setSignatureReference(
+  caseId: string,
+  documentId: string,
+  token: string,
+): Promise<{ signature_reference_document_id: string | null }> {
+  return apiFetch(`/cases/${caseId}/signature-reference`, {
+    method: "PUT",
+    token,
+    body: JSON.stringify({ document_id: documentId }),
+  })
+}
+
+export function clearSignatureReference(
+  caseId: string,
+  token: string,
+): Promise<{ signature_reference_document_id: string | null }> {
+  return apiFetch(`/cases/${caseId}/signature-reference`, { method: "DELETE", token })
+}

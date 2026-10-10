@@ -250,6 +250,7 @@ def _bundle_documents(documents: list[Document]) -> list[BundleDocument]:
             document_type=d.document_type,
             identity_fields=d.extracted_fields["identity_fields"],
             faces=tuple((d.extracted_fields.get("faces") or {}).get("items") or ()),
+            signatures=tuple((d.extracted_fields.get("signatures") or {}).get("items") or ()),
         )
         for d in sorted(documents, key=lambda d: (d.created_at, str(d.id)))
         if is_identity_extraction(d.extracted_fields)
@@ -304,14 +305,17 @@ def run_cross_document_checks(case_id: str, company_id: str | None = None) -> No
             db.delete(finding)
         db.flush()
 
-        case_type = db.execute(
-            select(Case.case_type).where(Case.id == case_uuid, Case.company_id == company_uuid)
-        ).scalar_one_or_none()
+        case_row = db.execute(
+            select(Case.case_type, Case.signature_reference_document_id).where(
+                Case.id == case_uuid, Case.company_id == company_uuid)
+        ).one_or_none()
+        case_type = case_row[0] if case_row else None
+        signature_reference = str(case_row[1]) if case_row and case_row[1] else None
         if len(completed_documents) < _MIN_DOCUMENTS_FOR_CROSS_DOCUMENT_CHECK:
             findings = []
         elif is_identity_case_type(case_type):
             # One person's bundle: contradictions between the documents.
-            findings = find_identity_contradictions(_bundle_documents(completed_documents))
+            findings = find_identity_contradictions(_bundle_documents(completed_documents), signature_reference)
         else:
             findings = find_cross_document_mismatches(completed_documents)
         for finding in findings:

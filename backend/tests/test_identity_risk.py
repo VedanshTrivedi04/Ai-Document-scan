@@ -6,7 +6,7 @@ import pytest
 from app.models.case import CaseType, RiskTier
 from app.models.cross_document_finding import REVIEW_DISMISSED, CrossDocumentFinding, FindingSeverity
 from app.models.user import User, UserRole
-from app.services.risk_rule_seed import IDENTITY_RULES, seed_risk_rules
+from app.services.risk_rule_seed import IDENTITY_RULES, SIGNATURE_RULES, seed_risk_rules
 from app.services.risk_scoring_service import score_case
 from tests.helpers_risk import add_cross_doc_event, add_document, make_case
 
@@ -85,4 +85,27 @@ def test_every_identity_rule_is_seeded_once(db_session, user):
     from app.models.risk_rule import RiskRule
 
     ids = [r.rule_id for r in db_session.query(RiskRule).filter(RiskRule.rule_id.like("identity.%"))]
-    assert sorted(ids) == sorted(r["rule_id"] for r in IDENTITY_RULES)
+    assert sorted(ids) == sorted(r["rule_id"] for r in [*IDENTITY_RULES, *SIGNATURE_RULES])
+
+
+def test_going_back_to_an_earlier_state_makes_that_assessment_the_latest_again(db_session, user):
+    """Dismissing a conflict (or removing the reference signature) returns the
+    evidence to a state that was scored before; the case must show that score again."""
+    from app.services.risk_scoring_service import latest_assessment
+
+    case = _case_with(db_session, user)
+    assert _score(db_session, case).score == 0
+    row = CrossDocumentFinding(
+        company_id=db_session.info["test_company_id"], case_id=case.id, field_name="full_name",
+        finding_type="identity_consistency", classification="conflict", reason="different_name",
+        severity=FindingSeverity.critical, description="x", document_ids=[],
+    )
+    db_session.add(row)
+    db_session.commit()
+    assert _score(db_session, case).tier == RiskTier.high
+    row.review_status = REVIEW_DISMISSED
+    db_session.commit()
+    _score(db_session, case)
+    latest = latest_assessment(db_session, db_session.info["test_company_id"], case.id)
+    assert latest.score == 0 and latest.tier == RiskTier.low
+    assert case.risk_tier == RiskTier.low

@@ -32,7 +32,7 @@ from typing import Any
 from rapidfuzz.distance import OSA
 
 from app.models.cross_document_finding import FindingSeverity
-from app.services import face_service
+from app.services import face_service, signature_local
 from app.services.identity_messages import describe_finding, display_value
 
 FINDING_TYPE = "identity_consistency"
@@ -54,6 +54,7 @@ COMPARED_FIELDS = (
 # The photographs on the documents are compared as one more "field"
 # (app/services/face_service.py); it has no text value of its own.
 PHOTO_FIELD = "photo"
+SIGNATURE_FIELD = "signature"
 
 # Identity numbers are compared only between two cards of the same kind: a
 # person has one of each, whereas two certificates legitimately carry
@@ -428,6 +429,8 @@ class BundleDocument:
     # (extracted_fields["faces"]["items"]). Empty when none were found or the
     # face models are not installed.
     faces: tuple[dict[str, Any], ...] = ()
+    # Handwritten signatures found on it (extracted_fields["signatures"]["items"]).
+    signatures: tuple[dict[str, Any], ...] = ()
 
 
 def compare_photos(doc_a: "BundleDocument", doc_b: "BundleDocument") -> Verdict | None:
@@ -452,7 +455,7 @@ def _photo_evidence(doc: "BundleDocument", face: dict[str, Any], same_type: bool
         "document_type": doc.document_type,
         "document_filename": doc.filename,
         "distinguish_by_filename": same_type,
-        "value": "photograph",
+        "value": "photograph (see the highlight)",
         "bounding_box": face.get("bounding_box"),
     }
 
@@ -504,7 +507,57 @@ def _evidence(field_name: str, doc: BundleDocument, same_type: bool) -> dict[str
     }
 
 
-def find_identity_contradictions(documents: list[BundleDocument]) -> list[dict[str, Any]]:
+def _signature_evidence(doc: BundleDocument, item: dict[str, Any] | None, same_type: bool) -> dict[str, Any]:
+    return {
+        "document_id": doc.id,
+        "document_type": doc.document_type,
+        "document_filename": doc.filename,
+        "distinguish_by_filename": same_type,
+        "value": "handwritten signature (see the highlight)" if item else "no signature found",
+        "bounding_box": (item or {}).get("bounding_box"),
+    }
+
+
+def signature_findings(documents: list[BundleDocument], reference_id: str | None) -> list[dict[str, Any]]:
+    """The reference document's signature against every other document of the
+    bundle (not every pair). A document with no signature is reported as not
+    compared, never as a mismatch."""
+    reference = next((d for d in documents if d.id == reference_id), None)
+    if reference is None or not reference.signatures:
+        return []
+    findings = []
+    for other in documents:
+        if other is reference:
+            continue
+        same_type = other.document_type == reference.document_type
+        best = signature_local.best_match(list(reference.signatures), list(other.signatures))
+        if best is None:
+            classification, reason, severity, detail = HARMLESS, "signature_absent", FindingSeverity.info, None
+            evidence = [_signature_evidence(reference, reference.signatures[0], same_type),
+                        _signature_evidence(other, None, same_type)]
+        else:
+            score, ref_item, other_item = best
+            detail = {"similarity": score}
+            if score >= signature_local.MATCH_THRESHOLD:
+                classification, reason, severity = HARMLESS, "signature_match", FindingSeverity.info
+            elif score >= signature_local.DIFFERENT_THRESHOLD:
+                classification, reason, severity = CONFLICT, "signature_uncertain", FindingSeverity.medium
+            else:
+                classification, reason, severity = CONFLICT, "signature_mismatch", FindingSeverity.high
+            evidence = [_signature_evidence(reference, ref_item, same_type),
+                        _signature_evidence(other, other_item, same_type)]
+        findings.append({
+            "field_name": SIGNATURE_FIELD, "finding_type": FINDING_TYPE, "classification": classification,
+            "reason": reason, "severity": severity,
+            "description": describe_finding(SIGNATURE_FIELD, classification, reason, evidence, detail),
+            "document_ids": [reference.id, other.id], "evidence": evidence, "detail": detail,
+        })
+    return findings
+
+
+def find_identity_contradictions(
+    documents: list[BundleDocument], signature_reference_id: str | None = None
+) -> list[dict[str, Any]]:
     """Every difference between the documents of one bundle, as dicts ready
     for `CrossDocumentFinding(case_id=..., **finding)`. Matching values
     produce nothing."""
@@ -531,6 +584,7 @@ def find_identity_contradictions(documents: list[BundleDocument]) -> list[dict[s
                 }
             )
         findings.extend(_photo_finding(doc_a, doc_b, same_type))
+    findings.extend(signature_findings(documents, signature_reference_id))
     return findings
 
 

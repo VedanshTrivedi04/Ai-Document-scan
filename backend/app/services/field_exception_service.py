@@ -119,9 +119,9 @@ def identity_finding_regions(field_name: str, evidence: list[dict[str, Any]]) ->
                 "label": label,
                 "value": item.get("value"),
                 "caption": (
-                    f"{label}: compared with the photograph on "
+                    f"{label}: compared with the one on "
                     + " / ".join(str(o["document_filename"]) for o in others)
-                    if field_name == "photo"
+                    if field_name in ("photo", "signature")
                     else f"{label}: {item.get('value')} (other document: "
                     + " / ".join(str(o["value"]) for o in others)
                     + ")"

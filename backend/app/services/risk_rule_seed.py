@@ -114,6 +114,14 @@ IDENTITY_RULES: list[dict[str, Any]] = [
 ]
 
 
+SIGNATURE_RULES: list[dict[str, Any]] = [
+    _identity_rule("identity.signature_mismatch", "signature", ["high"], 35, "high",
+                   "A signature clearly differs from the reference signature."),
+    _identity_rule("identity.signature_uncertain", "signature", ["medium"], 12, "medium",
+                   "A signature could not be matched with the reference signature."),
+]
+
+
 SEED_RULES: list[dict[str, Any]] = [
     # ---------------------------------------------------------------- metadata
     {
@@ -789,7 +797,7 @@ SEED_RULES: list[dict[str, Any]] = [
         "severity": "high",
         "reason_template": "The signature on '{document}' is pixel-identical to the reference on file for {person}, yet the printed signer beneath it differs. {reason}",
     },
-] + IDENTITY_RULES
+] + IDENTITY_RULES + SIGNATURE_RULES
 
 
 # The version of each built-in rule's definition, where it is past 1. Bumped

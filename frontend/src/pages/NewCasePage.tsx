@@ -288,8 +288,25 @@ export function NewCasePage() {
                     )}
                   </div>
 
+                  {/* A person's documents: signatures are found and compared by the pipeline itself
+                      (app/services/signature_local.py); the reviewer picks the reference in the case. */}
+                  {uploadedDocs.length > 0 && isIdentity && (
+                    <div className="rounded-lg border border-border bg-muted/20 p-4">
+                      <div className="mb-1.5 flex items-center gap-2">
+                        <PinIcon className="size-4 text-primary" />
+                        <span className="text-sm font-medium text-foreground">Compare signatures</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Once the documents have been read, open the case and choose the document whose signature
+                        is the reference (for example the PAN card). Every other document's signature is then
+                        compared with it, and a document with a different signature is flagged. A document with
+                        no signature is simply not compared. This comparison is advisory, for reviewer use only.
+                      </p>
+                    </div>
+                  )}
+
                   {/* Signature reference creation — optional, per-document */}
-                  {uploadedDocs.length > 0 && (
+                  {uploadedDocs.length > 0 && !isIdentity && (
                     <div className="rounded-lg border border-border bg-muted/20 p-4">
                       <div className="mb-3 flex items-center gap-2">
                         <PinIcon className="size-4 text-primary" />
