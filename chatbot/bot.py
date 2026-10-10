@@ -448,11 +448,47 @@ async def handle_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.error(f"Error handling chat message: {e}", exc_info=True)
         await _safe_reply(update, "Kripya apna sawal dobara poochein ya `/help` dekhein.")
 
+import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    """Responds to cloud health checks (e.g. Render Web Services) with 200 OK."""
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"OK - Sarthi Telegram Bot is live")
+
+    def log_message(self, format, *args):
+        # Silence routine ping logs to keep stdout clean
+        pass
+
+
+def start_health_server():
+    """Runs a minimal HTTP health server on PORT (default 10000) in a daemon thread."""
+    port_str = os.environ.get("PORT", "10000")
+    try:
+        port = int(port_str)
+    except ValueError:
+        port = 10000
+    try:
+        server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+        logger.info(f"Health check server listening on 0.0.0.0:{port}")
+        server.serve_forever()
+    except Exception as e:
+        logger.warning(f"Health check server could not bind to port {port}: {e}")
+
+
 def main():
     """Starts the Sarthi Telegram Bot."""
     if not TELEGRAM_BOT_TOKEN:
         print("ERROR: TELEGRAM_BOT_TOKEN not found in .env or environment!")
         return
+
+    # Start health server for Render / Cloud deployment
+    threading.Thread(target=start_health_server, daemon=True).start()
 
     print("🚀 Sarthi Telegram Bot (Backend Connected) is starting...")
     
