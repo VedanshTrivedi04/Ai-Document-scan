@@ -25,6 +25,20 @@ export function getOrgSubdomain(): string | null {
   const hostname = window.location.hostname
   const parts = hostname.split(".")
 
+  // Platform hosting domains (e.g., myservice.onrender.com, myapp.vercel.app)
+  // These 3-part hostnames represent the root platform service, NOT an organisation subdomain!
+  const isPlatformHosting =
+    hostname.endsWith(".onrender.com") ||
+    hostname.endsWith(".vercel.app") ||
+    hostname.endsWith(".netlify.app")
+
+  if (isPlatformHosting) {
+    if (parts.length >= 4) {
+      return parts[0]
+    }
+    return null
+  }
+
   // e.g. acme.docsure.com → ["acme", "docsure", "com"] → "acme"
   // e.g. docsure.com or localhost → no subdomain
   if (parts.length >= 3 && parts[0] !== "www") {
@@ -42,11 +56,25 @@ export function getOrgSubdomain(): string | null {
 export function getBaseDomain(): string {
   const hostname = window.location.hostname
   const parts = hostname.split(".")
+
+  const isPlatformHosting =
+    hostname.endsWith(".onrender.com") ||
+    hostname.endsWith(".vercel.app") ||
+    hostname.endsWith(".netlify.app")
+
+  if (isPlatformHosting) {
+    if (parts.length >= 4) {
+      return parts.slice(1).join(".")
+    }
+    return hostname
+  }
+
   if (parts.length >= 3 && parts[0] !== "www") {
     return parts.slice(1).join(".")
   }
   return hostname
 }
+
 
 /**
  * Builds a full URL for a given organisation subdomain and path.
