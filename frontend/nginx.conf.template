@@ -4,6 +4,8 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    resolver 8.8.8.8 1.1.1.1 valid=30s ipv6=off;
+
     # Request-body ceilings at the proxy, an outer backstop only. The API
     # enforces each company's own upload limits (companies.max_file_size_mb /
     # max_zip_size_mb, set by a platform admin) with specific messages, so these
@@ -20,6 +22,8 @@ server {
         proxy_request_buffering off;
         proxy_pass ${API_UPSTREAM}/bulk-uploads;
         proxy_http_version 1.1;
+        proxy_ssl_server_name on;
+        proxy_ssl_protocols TLSv1.2 TLSv1.3;
         proxy_set_header Host $proxy_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -32,13 +36,15 @@ server {
     location /api/ {
         proxy_pass ${API_UPSTREAM}/;
         proxy_http_version 1.1;
-        # Route by the upstream app name: Container Apps ingress is host-based.
+        proxy_ssl_server_name on;
+        proxy_ssl_protocols TLSv1.2 TLSv1.3;
         proxy_set_header Host $proxy_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
     }
+
 
     # nginx's default mime.types has no .mjs entry; browsers refuse to run module scripts
     # (the pdf.js worker) served as application/octet-stream.
