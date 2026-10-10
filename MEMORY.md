@@ -2241,6 +2241,6 @@ preventing the system from flagging inconsistencies between Aadhaar, PAN, voter 
 
 **Git**
 - Branch: `deploy`
-- Commit: Pending
-- Push: Pending
-- Status: In progress
+- Commit: `cb6c3ec` (`feat(deploy): add fddt-chatbot service to render.yaml`)
+- Push: Successful (`origin/deploy`)
+- Status: Complete
