@@ -126,6 +126,18 @@ export function LoginPage() {
 
       // If the user's company has a subdomain that differs from current site
       if (resp.company_subdomain && resp.company_subdomain !== currentSubdomain) {
+        const hostname = window.location.hostname
+        const isPlatformHosting =
+          hostname.endsWith(".onrender.com") ||
+          hostname.endsWith(".vercel.app") ||
+          hostname.endsWith(".netlify.app")
+
+        // On cloud platforms (Render/Vercel) without wildcard DNS, allow immediate login on the main domain
+        if (isPlatformHosting) {
+          navigate(resp.must_change_password ? "/change-password" : "/", { replace: true })
+          return
+        }
+
         const base = getBaseDomain()
         const targetHost = `${resp.company_subdomain}.${base}`
         const targetUrl = orgUrl(
@@ -139,6 +151,7 @@ export function LoginPage() {
         })
         return
       }
+
 
       navigate(resp.must_change_password ? "/change-password" : "/", { replace: true })
     } catch (err) {

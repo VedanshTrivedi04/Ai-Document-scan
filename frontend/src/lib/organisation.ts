@@ -18,6 +18,13 @@ const ORG_SUBDOMAIN_KEY = "VITE_ORG_SUBDOMAIN"
  * "www" or matches the root domain.
  */
 export function getOrgSubdomain(): string | null {
+  // Allow overriding via query param (essential for Render/Vercel without wildcard DNS)
+  if (typeof window !== "undefined") {
+    const urlParams = new URLSearchParams(window.location.search)
+    const orgFromQuery = urlParams.get("org")
+    if (orgFromQuery) return orgFromQuery
+  }
+
   // Allow overriding via env for local dev / Docker
   const envOverride = import.meta.env[ORG_SUBDOMAIN_KEY]
   if (envOverride) return envOverride as string
@@ -84,9 +91,23 @@ export function orgUrl(subdomain: string | null, path: string): string {
   const base = getBaseDomain()
   const protocol = window.location.protocol
   const port = window.location.port ? `:${window.location.port}` : ""
+
+  const isPlatformHosting =
+    base.endsWith(".onrender.com") ||
+    base.endsWith(".vercel.app") ||
+    base.endsWith(".netlify.app")
+
+  // On Render/Vercel (e.g. *.onrender.com), wildcard subdomains like foo.service.onrender.com
+  // do not exist in DNS! We use ?org=subdomain query param instead so links never break.
+  if (isPlatformHosting && subdomain) {
+    const separator = path.includes("?") ? "&" : "?"
+    return `${protocol}//${base}${port}${path}${separator}org=${encodeURIComponent(subdomain)}`
+  }
+
   const host = subdomain ? `${subdomain}.${base}` : base
   return `${protocol}//${host}${port}${path}`
 }
+
 
 /**
  * Validates an organisation subdomain string.
